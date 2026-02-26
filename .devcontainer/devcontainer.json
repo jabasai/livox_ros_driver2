@@ -1,11 +1,8 @@
 {
   "name": "livox_ros_driver2 (ROS2 Humble)",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": ".."
-  },
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
   "workspaceFolder": "/ros2_ws/src/livox_ros_driver2",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/ros2_ws/src/livox_ros_driver2,type=bind",
   "remoteEnv": {
     "ROS_DISTRO": "humble",
     "AMENT_PREFIX_PATH": "/opt/ros/humble",
@@ -16,7 +13,6 @@
       "extensions": [
         "ms-vscode.cpptools",
         "ms-vscode.cmake-tools",
-        "ms-iot.vscode-ros",
         "ms-python.python"
       ],
       "settings": {
