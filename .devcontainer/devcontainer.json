@@ -1,0 +1,43 @@
+{
+  "name": "livox_ros_driver2 (ROS2 Humble)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/ros2_ws/src/livox_ros_driver2",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/ros2_ws/src/livox_ros_driver2,type=bind",
+  "remoteEnv": {
+    "ROS_DISTRO": "humble",
+    "AMENT_PREFIX_PATH": "/opt/ros/humble",
+    "ROS_DOMAIN_ID": "0"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-iot.vscode-ros",
+        "twxs.cmake",
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "/bin/bash",
+            "args": ["--login"]
+          }
+        },
+        "cmake.buildDirectory": "/ros2_ws/build/livox_ros_driver2",
+        "C_Cpp.default.includePath": [
+          "/opt/ros/humble/include/**",
+          "/ros2_ws/src/livox_ros_driver2/src/**",
+          "/ros2_ws/src/livox_ros_driver2/3rdparty/**"
+        ]
+      }
+    }
+  },
+  "postCreateCommand": "cd /ros2_ws && bash -c 'source /opt/ros/humble/setup.bash && cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml'",
+  "postStartCommand": "source /opt/ros/humble/setup.bash",
+  "features": {}
+}
