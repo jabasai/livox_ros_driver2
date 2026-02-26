@@ -1,3 +1,24 @@
+# Set defaults if not specified, using ROS environment variables when available
+if(NOT DEFINED ROS_EDITION)
+  if(DEFINED ENV{ROS_VERSION})
+    if("$ENV{ROS_VERSION}" STREQUAL "1")
+      set(ROS_EDITION "ROS1" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+    else()
+      set(ROS_EDITION "ROS2" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+    endif()
+  else()
+    set(ROS_EDITION "ROS2" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+  endif()
+endif()
+
+if(NOT DEFINED HUMBLE_ROS)
+  if(DEFINED ENV{ROS_DISTRO})
+    set(HUMBLE_ROS "$ENV{ROS_DISTRO}" CACHE STRING "ROS2 distro name" FORCE)
+  else()
+    set(HUMBLE_ROS "humble" CACHE STRING "ROS2 distro name" FORCE)
+  endif()
+endif()
+
 # judge which cmake codes to use 
 if(ROS_EDITION STREQUAL "ROS1")
 
@@ -330,7 +351,7 @@ else(ROS_EDITION STREQUAL "ROS2")
 
   ament_auto_package(INSTALL_TO_SHARE
     config
-    launch_ROS2
+    launch
   )
 
 endif()

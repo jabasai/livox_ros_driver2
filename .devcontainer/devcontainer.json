@@ -17,7 +17,6 @@
         "ms-vscode.cpptools",
         "ms-vscode.cmake-tools",
         "ms-iot.vscode-ros",
-        "twxs.cmake",
         "ms-python.python"
       ],
       "settings": {
@@ -38,6 +37,6 @@
     }
   },
   "postCreateCommand": "cd /ros2_ws && bash -c 'source /opt/ros/humble/setup.bash && cp src/livox_ros_driver2/package_ROS2.xml src/livox_ros_driver2/package.xml'",
-  "postStartCommand": "source /opt/ros/humble/setup.bash",
+  "postStartCommand": ". /opt/ros/humble/setup.sh",
   "features": {}
 }

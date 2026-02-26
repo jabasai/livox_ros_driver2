@@ -29,6 +29,24 @@ RUN apt-get update && apt-get install -y \
     ros-humble-ament-lint-common \
     && rm -rf /var/lib/apt/lists/*
 
+RUN \
+    echo "Installing livox_sdk2..." && \
+    REPO_DIR="/tmp/livox_sdk2_repo" && \
+    mkdir -p "$REPO_DIR" && \
+    git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2" && \
+    cd "$REPO_DIR/Livox-SDK2" && \
+    mkdir -p build && \
+    cd build && \
+    rm -rf * && \
+    cmake ..  && \
+    make -j$(nproc) && \
+    make install && \
+    echo "livox_sdk2 installed successfully." && \
+    cd "/" && \
+    rm -rf "$REPO_DIR" && \
+    ldconfig
+
+
 # Source ROS2 in every new shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
 
