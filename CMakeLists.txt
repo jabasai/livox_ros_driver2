@@ -338,6 +338,30 @@ else(ROS_EDITION STREQUAL "ROS2")
     EXECUTABLE ${PROJECT_NAME}_node
   )
 
+  # livox_set_ip: standalone command-line tool to configure lidar IP addresses
+  add_executable(livox_set_ip src/tools/livox_set_ip.cpp)
+  target_include_directories(livox_set_ip PRIVATE
+    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+  )
+  target_link_libraries(livox_set_ip
+    ${LIVOX_LIDAR_SDK_LIBRARY}
+  )
+  install(TARGETS livox_set_ip
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
+  # livox_scan: standalone command-line tool to discover and report Livox devices
+  add_executable(livox_scan src/tools/livox_scan.cpp)
+  target_include_directories(livox_scan PRIVATE
+    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+  )
+  target_link_libraries(livox_scan
+    ${LIVOX_LIDAR_SDK_LIBRARY}
+  )
+  install(TARGETS livox_scan
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
   if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)
     # the following line skips the linter which checks for copyrights

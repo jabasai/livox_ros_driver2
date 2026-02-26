@@ -485,19 +485,114 @@ For more infomation about the HAP config, please refer to:
 
 ```
 
-## 5. Supported LiDAR list
+## 5. Utility Tools
+
+### 5.1 livox_set_ip — Change a LiDAR's IP address
+
+`livox_set_ip` is a standalone command-line tool that uses Livox-SDK2 to assign a new static IP address to any connected Livox LiDAR (e.g. MID-360, HAP). It is useful for initial device setup or when you need to move a LiDAR to a different subnet.
+
+**Usage:**
+
+```shell
+ros2 run livox_ros_driver2 livox_set_ip <current_lidar_ip> <new_ip> <netmask> <gateway> [host_ip]
+```
+
+| Argument | Description |
+| --- | --- |
+| `current_lidar_ip` | Current IP of the LiDAR to configure |
+| `new_ip` | New static IP to assign to the LiDAR |
+| `netmask` | Subnet mask (e.g. `255.255.255.0`) |
+| `gateway` | Gateway address (e.g. `192.168.1.1`) |
+| `host_ip` | *(optional)* IP of the host NIC connected to the LiDAR; omit to let the SDK auto-detect |
+
+**Examples:**
+
+```shell
+# Change lidar IP; host NIC is explicitly specified
+ros2 run livox_ros_driver2 livox_set_ip 192.168.1.1xx 192.168.1.167 255.255.255.0 192.168.1.1 192.168.1.10
+
+# Host IP auto-detected by the SDK
+ros2 run livox_ros_driver2 livox_set_ip 192.168.1.167 192.168.1.184 255.255.255.0 192.168.1.1
+```
+
+> **IMPORTANT:** Power-cycle the LiDAR after the tool reports success for the new IP address to take effect.
+
+### 5.2 livox_scan — Discover LiDAR devices on the network
+
+`livox_scan` listens for Livox device announcements for a configurable period and prints a summary table of every device found, including its IP address, device type, and serial number.
+
+**Usage:**
+
+```shell
+ros2 run livox_ros_driver2 livox_scan [OPTIONS] [host_ip [timeout_seconds]]
+```
+
+**Options:**
+
+| Option | Description |
+| --- | --- |
+| `-h`, `--help` | Show help message and exit |
+
+**Arguments:**
+
+| Argument | Description |
+| --- | --- |
+| `host_ip` | *(optional)* IP of the host NIC facing the LiDARs; omit to let the SDK auto-detect |
+| `timeout_seconds` | *(optional)* How long to scan in seconds (default: `10`) |
+
+**Examples:**
+
+```shell
+# Show help
+ros2 run livox_ros_driver2 livox_scan --help
+
+# Scan all NICs for 10 seconds (default)
+ros2 run livox_ros_driver2 livox_scan
+
+# Scan from a specific NIC
+ros2 run livox_ros_driver2 livox_scan 192.168.1.10
+
+# Scan from a specific NIC with a 5-second timeout
+ros2 run livox_ros_driver2 livox_scan 192.168.1.10 5
+```
+
+**Example output:**
+
+```
+=== Livox LiDAR scanner ===
+  Host NIC : (auto-detect)
+  Timeout  : 10 s
+
+[info] Scanning for 10 second(s) ...
+
+[found] 192.168.1.167  type=Mid-360  sn=0TFDH7600601234
+[found] 192.168.1.184  type=Mid-360  sn=0TFDH7600605678
+
+[result] Found 2 device(s):
+
++------------------+------------------+--------------------+
+| IP Address       | Device Type      | Serial Number      |
++------------------+------------------+--------------------+
+| 192.168.1.167    | Mid-360          | 0TFDH7600601234    |
+| 192.168.1.184    | Mid-360          | 0TFDH7600605678    |
++------------------+------------------+--------------------+
+```
+
+---
+
+## 6. Supported LiDAR list
 
 * HAP
 * Mid360
 * (more types are comming soon...)
 
-## 6. FAQ
+## 7. FAQ
 
-### 6.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
+### 7.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
 
 Please check the "Global Options - Fixed Frame" field in the RViz "Display" pannel. Set the field value to "livox_frame" and check the "PointCloud2" option in the pannel.
 
-### 6.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
+### 7.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
 
 Please add '/usr/local/lib' to the env LD_LIBRARY_PATH.
 
