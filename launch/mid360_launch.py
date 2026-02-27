@@ -68,6 +68,14 @@ def _generate_config(livox_ip: str, host_ip: str, port_base: int, namespace: str
     The lidar-side ports (56100, 56200, …) are fixed by firmware and
     are therefore kept at their standard values.
     """
+    # IMPORTANT: host_net_info MUST be a JSON array whose entries each carry a
+    # "lidar_ip" array field.  This routes the entry into the SDK's
+    # `custom_lidars_cfg_map_` (keyed by the specific lidar IP) instead of the
+    # `type_lidars_cfg_map_` (keyed by device-type = "all MID360s").
+    # When host_net_info is a plain JSON object the SDK stores the entry in
+    # type_lidars_cfg_map_, which it then applies to EVERY MID360 it discovers
+    # on the subnet – including lidars owned by other driver instances.  That
+    # overwrites their host-IP/port registration and kills their data stream.
     config = {
         'lidar_summary_info': {'lidar_type': 8},
         'MID360': {
@@ -78,18 +86,17 @@ def _generate_config(livox_ip: str, host_ip: str, port_base: int, namespace: str
                 'imu_data_port':   56400,
                 'log_data_port':   56500,
             },
-            'host_net_info': {  # configuring the host IP and ports
-                'cmd_data_ip':      host_ip,
-                'cmd_data_port':    port_base,
-                'push_msg_ip':      host_ip,
-                'push_msg_port':    port_base + 1,
-                'point_data_ip':    host_ip,
-                'point_data_port':  port_base + 2,
-                'imu_data_ip':      host_ip,
-                'imu_data_port':    port_base + 3,
-                'log_data_ip':      '',
-                'log_data_port':    port_base + 4,
-            },
+            'host_net_info': [  # array format → per-IP entry, not generic device-type entry
+                {
+                    'lidar_ip':      [livox_ip],  # binds this entry to exactly this lidar
+                    'host_ip':        host_ip,
+                    'cmd_data_port':  port_base,
+                    'push_msg_port':  port_base + 1,
+                    'point_data_port': port_base + 2,
+                    'imu_data_port':  port_base + 3,
+                    'log_data_port':  port_base + 4,
+                }
+            ],
         },
         'lidar_configs': [
             {
@@ -180,6 +187,18 @@ def _launch_setup(context, *args, **kwargs):
     node_name = LaunchConfiguration('node_name').perform(context) or 'livox_lidar'
     ns_arg    = namespace if namespace else ''
 
+    # Build topic remappings: the driver appends the IP (dots→underscores) to
+    # the topic names, e.g. livox/lidar_192_168_1_184.  Remap these to clean
+    # names:  with a namespace → "points" / "imu" (namespace is already the
+    # prefix);  without a namespace → "<node_name>/points" / "<node_name>/imu".
+    ip_suffix = livox_ip.replace('.', '_')
+    if namespace:
+        points_dst = 'points'
+        imu_dst    = 'imu'
+    else:
+        points_dst = f'{node_name}/points'
+        imu_dst    = f'{node_name}/imu'
+
     lidar_node = Node(
         package='livox_ros_driver2',
         executable='livox_ros_driver2_node',
@@ -195,6 +214,10 @@ def _launch_setup(context, *args, **kwargs):
             {'frame_id':              frame_id},
             {'user_config_path':      config_path},
             {'cmdline_input_bd_code': ''},
+        ],
+        remappings=[
+            (f'livox/lidar_{ip_suffix}', points_dst),
+            (f'livox/imu_{ip_suffix}',   imu_dst),
         ],
     )
 

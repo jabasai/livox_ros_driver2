@@ -27,6 +27,7 @@
 #include <string>
 #include <thread>
 #include <iostream>
+#include <unordered_set>
 
 namespace livox_ros {
 
@@ -41,16 +42,20 @@ void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
 
   LidarDevice* lidar_device = GetLidarDevice(handle, client_data);
   if (lidar_device == nullptr) {
-    std::cout << "found lidar not defined in the user-defined config, ip: " << IpNumToString(handle) << std::endl;
-    // add lidar device
-    uint8_t index = 0;
-    int8_t ret = lds_lidar->cache_index_.GetFreeIndex(kLivoxLidarType, handle, index);
-    if (ret != 0) {
-      std::cout << "failed to add lidar device, lidar ip: " << IpNumToString(handle) << std::endl;
-      return;
+    // This lidar is not in this driver instance's user-defined config (it may
+    // belong to another driver instance on the same host).  Do NOT send any
+    // SDK commands (SetLivoxLidarWorkMode, EnableLivoxLidarImuData, etc.) to
+    // it: doing so would make the lidar re-route its data stream to this
+    // process, silently breaking the other driver instance that owns it.
+    // Log once per foreign IP to avoid flooding the console on every
+    // periodic SDK re-discovery event.
+    static std::unordered_set<uint32_t> s_logged_foreign;
+    if (s_logged_foreign.insert(handle).second) {
+      std::cout << "[livox_driver] Ignoring lidar " << IpNumToString(handle)
+                << " — not in this instance's config (likely owned by another driver process)"
+                << std::endl;
     }
-    LidarDevice *p_lidar = &(lds_lidar->lidars_[index]);
-    p_lidar->lidar_type = kLivoxLidarType;
+    return;
   } else {
     // set the lidar according to the user-defined config
     const UserLivoxLidarConfig& config = lidar_device->livox_config;
