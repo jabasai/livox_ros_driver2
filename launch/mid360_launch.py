@@ -163,18 +163,18 @@ def _launch_setup(context, *args, **kwargs):
     # --- Generate config file ------------------------------------------------
     config_path = _generate_config(livox_ip, host_ip, port_base, namespace)
 
-    print(
-        f'[mid360_launch] namespace={namespace!r}  '
-        f'livox_ip={livox_ip}  host_ip={host_ip}  '
-        f'port_base={port_base}  frame_id={frame_id!r}  config={config_path}'
-    )
-
     # --- frame_id ------------------------------------------------------------
     frame_id_arg = LaunchConfiguration('frame_id').perform(context)
     if frame_id_arg:
         frame_id = frame_id_arg
     else:
         frame_id = namespace if namespace else 'livox_frame'
+
+    print(
+        f'[mid360_launch] namespace={namespace!r}  '
+        f'livox_ip={livox_ip}  host_ip={host_ip}  '
+        f'port_base={port_base}  frame_id={frame_id!r}  config={config_path}'
+    )
 
     # --- Node ----------------------------------------------------------------
     node_name = LaunchConfiguration('node_name').perform(context) or 'livox_lidar'
