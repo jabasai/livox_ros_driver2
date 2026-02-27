@@ -1,33 +1,100 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+
+# ---------------------------------------------------------------------------
+# Port layout (5 consecutive ports per lidar, 10-port gap between the two):
+#   front_lidar : 56101 – 56105
+#   back_lidar  : 56111 – 56115
+# ---------------------------------------------------------------------------
+DEFAULT_FRONT_NS        = 'front_lidar'
+DEFAULT_BACK_NS         = 'back_lidar'
+DEFAULT_FRONT_IP        = '192.168.1.167'
+DEFAULT_BACK_IP         = '192.168.1.184'
+DEFAULT_FRONT_PORT_BASE = 56101
+DEFAULT_BACK_PORT_BASE  = 56111
+
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('livox_ros_driver2')
-    config_dir = os.path.join(pkg_share, 'config')
-    launch_dir = os.path.join(pkg_share, 'launch')
-    mid360_launch = os.path.join(launch_dir, 'mid360_launch.py')
+    mid360_launch = os.path.join(pkg_share, 'launch', 'mid360_launch.py')
 
-    # --- Lidar 1: 192.168.1.167 ---
-    lidar1 = IncludeLaunchDescription(
+    # ------------------------------------------------------------------ args
+    front_ns_arg = DeclareLaunchArgument(
+        'front_namespace',
+        default_value=DEFAULT_FRONT_NS,
+        description='Namespace for the front lidar node and topics.',
+    )
+    back_ns_arg = DeclareLaunchArgument(
+        'back_namespace',
+        default_value=DEFAULT_BACK_NS,
+        description='Namespace for the back lidar node and topics.',
+    )
+    front_ip_arg = DeclareLaunchArgument(
+        'front_livox_ip',
+        default_value=DEFAULT_FRONT_IP,
+        description=(
+            f'IP of the front MID360 lidar. '
+            f'Also overridable via {DEFAULT_FRONT_NS.upper()}_LIVOX_IP.'
+        ),
+    )
+    back_ip_arg = DeclareLaunchArgument(
+        'back_livox_ip',
+        default_value=DEFAULT_BACK_IP,
+        description=(
+            f'IP of the back MID360 lidar. '
+            f'Also overridable via {DEFAULT_BACK_NS.upper()}_LIVOX_IP.'
+        ),
+    )
+    front_port_arg = DeclareLaunchArgument(
+        'front_port_base',
+        default_value=str(DEFAULT_FRONT_PORT_BASE),
+        description=(
+            f'First UDP host port for the front lidar (uses base…base+4). '
+            f'Also overridable via {DEFAULT_FRONT_NS.upper()}_LIVOX_PORT_BASE. '
+            f'Default: {DEFAULT_FRONT_PORT_BASE}–{DEFAULT_FRONT_PORT_BASE + 4}.'
+        ),
+    )
+    back_port_arg = DeclareLaunchArgument(
+        'back_port_base',
+        default_value=str(DEFAULT_BACK_PORT_BASE),
+        description=(
+            f'First UDP host port for the back lidar (uses base…base+4). '
+            f'Also overridable via {DEFAULT_BACK_NS.upper()}_LIVOX_PORT_BASE. '
+            f'Default: {DEFAULT_BACK_PORT_BASE}–{DEFAULT_BACK_PORT_BASE + 4}.'
+        ),
+    )
+
+    # ---------------------------------------------------------- front lidar
+    front_lidar = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(mid360_launch),
         launch_arguments={
-            'config_path': os.path.join(config_dir, 'MID360_config_167.json'),
-            'frame_id':    'livox_frame_167',
-            'node_name':   'livox_lidar_167',
+            'namespace':       LaunchConfiguration('front_namespace'),
+            'livox_ip':        LaunchConfiguration('front_livox_ip'),
+            'livox_port_base': LaunchConfiguration('front_port_base'),
         }.items(),
     )
 
-    # --- Lidar 2: 192.168.1.184 ---
-    lidar2 = IncludeLaunchDescription(
+    # ----------------------------------------------------------- back lidar
+    back_lidar = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(mid360_launch),
         launch_arguments={
-            'config_path': os.path.join(config_dir, 'MID360_config_184.json'),
-            'frame_id':    'livox_frame_184',
-            'node_name':   'livox_lidar_184',
+            'namespace':       LaunchConfiguration('back_namespace'),
+            'livox_ip':        LaunchConfiguration('back_livox_ip'),
+            'livox_port_base': LaunchConfiguration('back_port_base'),
         }.items(),
     )
 
-    return LaunchDescription([lidar1, lidar2])
+    return LaunchDescription([
+        front_ns_arg,
+        back_ns_arg,
+        front_ip_arg,
+        back_ip_arg,
+        front_port_arg,
+        back_port_arg,
+        front_lidar,
+        back_lidar,
+    ])
