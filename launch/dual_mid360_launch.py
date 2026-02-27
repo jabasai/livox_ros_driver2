@@ -35,7 +35,7 @@ def generate_launch_description():
     )
     front_ip_arg = DeclareLaunchArgument(
         'front_livox_ip',
-        default_value=DEFAULT_FRONT_IP,
+        default_value=os.environ.get(f'{DEFAULT_FRONT_NS.upper()}_LIVOX_IP', DEFAULT_FRONT_IP),
         description=(
             f'IP of the front MID360 lidar. '
             f'Also overridable via {DEFAULT_FRONT_NS.upper()}_LIVOX_IP.'
@@ -43,7 +43,7 @@ def generate_launch_description():
     )
     back_ip_arg = DeclareLaunchArgument(
         'back_livox_ip',
-        default_value=DEFAULT_BACK_IP,
+        default_value=os.environ.get(f'{DEFAULT_BACK_NS.upper()}_LIVOX_IP', DEFAULT_BACK_IP),
         description=(
             f'IP of the back MID360 lidar. '
             f'Also overridable via {DEFAULT_BACK_NS.upper()}_LIVOX_IP.'
@@ -51,7 +51,7 @@ def generate_launch_description():
     )
     front_port_arg = DeclareLaunchArgument(
         'front_port_base',
-        default_value=str(DEFAULT_FRONT_PORT_BASE),
+        default_value=os.environ.get(f'{DEFAULT_FRONT_NS.upper()}_LIVOX_PORT_BASE', str(DEFAULT_FRONT_PORT_BASE)),
         description=(
             f'First UDP host port for the front lidar (uses base…base+4). '
             f'Also overridable via {DEFAULT_FRONT_NS.upper()}_LIVOX_PORT_BASE. '
@@ -60,7 +60,7 @@ def generate_launch_description():
     )
     back_port_arg = DeclareLaunchArgument(
         'back_port_base',
-        default_value=str(DEFAULT_BACK_PORT_BASE),
+        default_value=os.environ.get(f'{DEFAULT_BACK_NS.upper()}_LIVOX_PORT_BASE', str(DEFAULT_BACK_PORT_BASE)),
         description=(
             f'First UDP host port for the back lidar (uses base…base+4). '
             f'Also overridable via {DEFAULT_BACK_NS.upper()}_LIVOX_PORT_BASE. '
