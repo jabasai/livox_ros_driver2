@@ -175,7 +175,7 @@ def _launch_setup(context, *args, **kwargs):
     if frame_id_arg:
         frame_id = frame_id_arg
     else:
-        frame_id = namespace if namespace else 'livox_frame'
+        frame_id = f"{namespace}_link" if namespace else 'livox_frame'
 
     print(
         f'[mid360_launch] namespace={namespace!r}  '
