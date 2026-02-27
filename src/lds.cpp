@@ -108,8 +108,7 @@ void Lds::StorageImuData(ImuData* imu_data) {
   uint8_t index = 0;
   int ret = cache_index_.GetIndex(imu_data->lidar_type, device_num, index);
   if (ret != 0) {
-    printf("Storage point data failed, can not get index, lidar type:%u, device_num:%u.\n", imu_data->lidar_type, device_num);
-    return;
+    return;  // unknown handle — already filtered upstream by PubHandler allowlist
   }
 
   LidarDevice *p_lidar = &lidars_[index];
@@ -160,8 +159,7 @@ void Lds::StoragePointData(PointFrame* frame) {
     uint8_t index = 0;
     int8_t ret = cache_index_.GetIndex(lidar_point.lidar_type, lidar_point.handle, index);
     if (ret != 0) {
-      printf("Storage point data failed, lidar type:%u, handle:%u.\n", lidar_point.lidar_type, lidar_point.handle);
-      continue;
+      continue;  // unknown handle — already filtered upstream by PubHandler allowlist
     }
     PushLidarData(&lidar_point, index, base_time);
   }

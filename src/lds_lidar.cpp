@@ -157,6 +157,9 @@ bool LdsLidar::InitLivoxLidar() {
     p_lidar->livox_config = config;
     p_lidar->handle = config.handle;
 
+    // Register this handle so PubHandler drops packets from foreign lidars.
+    pub_handler().AllowHandle(config.handle);
+
     LidarExtParameter lidar_param;
     lidar_param.handle = config.handle;
     lidar_param.lidar_type = kLivoxLidarType;

@@ -89,6 +89,11 @@ void PubHandler::ClearAllLidarsExtrinsicParams() {
   lidar_extrinsics_.clear();
 }
 
+void PubHandler::AllowHandle(uint32_t handle) {
+  std::lock_guard<std::mutex> lock(allowed_handles_mutex_);
+  allowed_handles_.insert(handle);
+}
+
 void PubHandler::SetPointCloudsCallback(PointCloudsCallback cb, void* client_data) {
   pub_client_data_ = client_data;
   points_callback_ = cb;
@@ -100,6 +105,17 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
   PubHandler* self = (PubHandler*)client_data;
   if (!self) {
     return;
+  }
+
+  // Drop packets from lidars not explicitly configured for this driver instance.
+  // This prevents cross-talk when two driver nodes run on the same host and the
+  // SDK observer fires for all discovered lidars regardless of which node owns them.
+  {
+    std::lock_guard<std::mutex> lock(self->allowed_handles_mutex_);
+    if (!self->allowed_handles_.empty() &&
+        self->allowed_handles_.find(handle) == self->allowed_handles_.end()) {
+      return;  // foreign lidar — silently ignore
+    }
   }
 
   if (data->time_type != kTimestampTypeNoSync) {

@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -16,6 +16,9 @@ DEFAULT_FRONT_IP        = '192.168.1.167'
 DEFAULT_BACK_IP         = '192.168.1.184'
 DEFAULT_FRONT_PORT_BASE = 56101
 DEFAULT_BACK_PORT_BASE  = 56111
+# Seconds to wait after starting the front lidar before starting the back lidar.
+# Both lidars initialising simultaneously can cause connection issues.
+DEFAULT_BACK_LIDAR_DELAY = 5.0
 
 
 def generate_launch_description():
@@ -67,6 +70,15 @@ def generate_launch_description():
             f'Default: {DEFAULT_BACK_PORT_BASE}–{DEFAULT_BACK_PORT_BASE + 4}.'
         ),
     )
+    back_delay_arg = DeclareLaunchArgument(
+        'back_lidar_delay',
+        default_value=str(DEFAULT_BACK_LIDAR_DELAY),
+        description=(
+            'Seconds to wait after launching the front lidar before launching '
+            'the back lidar. Avoids simultaneous initialisation issues. '
+            f'Default: {DEFAULT_BACK_LIDAR_DELAY} s.'
+        ),
+    )
 
     # ---------------------------------------------------------- front lidar
     front_lidar = IncludeLaunchDescription(
@@ -79,13 +91,20 @@ def generate_launch_description():
     )
 
     # ----------------------------------------------------------- back lidar
-    back_lidar = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(mid360_launch),
-        launch_arguments={
-            'namespace':       LaunchConfiguration('back_namespace'),
-            'livox_ip':        LaunchConfiguration('back_livox_ip'),
-            'livox_port_base': LaunchConfiguration('back_port_base'),
-        }.items(),
+    # Wrapped in a TimerAction so it starts *after* the front lidar has had
+    # time to complete its UDP handshake / firmware negotiation.
+    back_lidar = TimerAction(
+        period=LaunchConfiguration('back_lidar_delay'),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(mid360_launch),
+                launch_arguments={
+                    'namespace':       LaunchConfiguration('back_namespace'),
+                    'livox_ip':        LaunchConfiguration('back_livox_ip'),
+                    'livox_port_base': LaunchConfiguration('back_port_base'),
+                }.items(),
+            )
+        ],
     )
 
     return LaunchDescription([
@@ -95,6 +114,7 @@ def generate_launch_description():
         back_ip_arg,
         front_port_arg,
         back_port_arg,
+        back_delay_arg,
         front_lidar,
         back_lidar,
     ])

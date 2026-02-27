@@ -34,6 +34,7 @@
 #include <memory>
 #include <mutex>              // std::mutex
 #include <thread>
+#include <unordered_set>
 
 #include "livox_lidar_def.h"
 #include "livox_lidar_api.h"
@@ -90,6 +91,9 @@ class PubHandler {
   void AddLidarsExtParam(LidarExtParameter& extrinsic_params);
   void ClearAllLidarsExtrinsicParams();
   void SetImuDataCallback(ImuDataCallback cb, void* client_data);
+  // Register a lidar handle (IP as uint32) that this driver instance owns.
+  // Only packets from registered handles are processed; all others are dropped.
+  void AllowHandle(uint32_t handle);
 
  private:
   //thread to process raw data
@@ -129,6 +133,9 @@ class PubHandler {
   std::map<uint32_t, LidarExtParameter> lidar_extrinsics_;
   static std::atomic<bool> is_timestamp_sync_;
   uint16_t lidar_listen_id_ = 0;
+  // Allowlist of lidar handles (= IP as uint32) this instance is configured for.
+  std::unordered_set<uint32_t> allowed_handles_;
+  std::mutex allowed_handles_mutex_;
 };
 
 PubHandler &pub_handler();
