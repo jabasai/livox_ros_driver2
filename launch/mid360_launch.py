@@ -180,6 +180,18 @@ def _launch_setup(context, *args, **kwargs):
     node_name = LaunchConfiguration('node_name').perform(context) or 'livox_lidar'
     ns_arg    = namespace if namespace else ''
 
+    # Build topic remappings: the driver appends the IP (dots→underscores) to
+    # the topic names, e.g. livox/lidar_192_168_1_184.  Remap these to clean
+    # names:  with a namespace → "points" / "imu" (namespace is already the
+    # prefix);  without a namespace → "<node_name>/points" / "<node_name>/imu".
+    ip_suffix = livox_ip.replace('.', '_')
+    if namespace:
+        points_dst = 'points'
+        imu_dst    = 'imu'
+    else:
+        points_dst = f'{node_name}/points'
+        imu_dst    = f'{node_name}/imu'
+
     lidar_node = Node(
         package='livox_ros_driver2',
         executable='livox_ros_driver2_node',
@@ -195,6 +207,10 @@ def _launch_setup(context, *args, **kwargs):
             {'frame_id':              frame_id},
             {'user_config_path':      config_path},
             {'cmdline_input_bd_code': ''},
+        ],
+        remappings=[
+            (f'livox/lidar_{ip_suffix}', points_dst),
+            (f'livox/imu_{ip_suffix}',   imu_dst),
         ],
     )
 

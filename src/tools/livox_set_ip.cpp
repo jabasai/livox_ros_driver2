@@ -23,11 +23,14 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unistd.h>
 
 // --------------------------------------------------------------------------
 // Global state shared between callbacks and main thread
@@ -129,6 +132,48 @@ static void OnLidarInfoChange(const uint32_t handle,
 }
 
 // --------------------------------------------------------------------------
+// Write a minimal Livox SDK config to a temp file so that the SDK has a
+// valid device-info map structure before handling discovery responses.
+// Passing nullptr for the config causes GetFirmwareType() to dereference
+// an uninitialised map entry → SIGSEGV when any lidar replies.
+// --------------------------------------------------------------------------
+static std::string WriteTempConfig(const std::string& host_ip) {
+  std::string path = "/tmp/livox_set_ip_config_" + std::to_string(getpid()) + ".json";
+  const std::string ip = host_ip.empty() ? "0.0.0.0" : host_ip;
+
+  std::ofstream f(path);
+  if (!f.is_open()) return "";
+
+  f << "{\n"
+    << "  \"lidar_summary_info\": { \"lidar_type\": 8 },\n"
+    << "  \"MID360\": {\n"
+    << "    \"lidar_net_info\": {\n"
+    << "      \"cmd_data_port\": 56100,\n"
+    << "      \"push_msg_port\": 56200,\n"
+    << "      \"point_data_port\": 56300,\n"
+    << "      \"imu_data_port\": 56400,\n"
+    << "      \"log_data_port\": 56500\n"
+    << "    },\n"
+    << "    \"host_net_info\": {\n"
+    << "      \"cmd_data_ip\": \"" << ip << "\",\n"
+    << "      \"cmd_data_port\": 56101,\n"
+    << "      \"push_msg_ip\": \"" << ip << "\",\n"
+    << "      \"push_msg_port\": 56201,\n"
+    << "      \"point_data_ip\": \"" << ip << "\",\n"
+    << "      \"point_data_port\": 56301,\n"
+    << "      \"imu_data_ip\": \"" << ip << "\",\n"
+    << "      \"imu_data_port\": 56401,\n"
+    << "      \"log_data_ip\": \"\",\n"
+    << "      \"log_data_port\": 56501\n"
+    << "    }\n"
+    << "  },\n"
+    << "  \"lidar_configs\": []\n"
+    << "}\n";
+
+  return f.good() ? path : "";
+}
+
+// --------------------------------------------------------------------------
 // Usage
 // --------------------------------------------------------------------------
 static void PrintUsage(const char* prog) {
@@ -178,11 +223,21 @@ int main(int argc, char** argv) {
   // Register the device-discovery callback BEFORE initialising the SDK
   SetLivoxLidarInfoChangeCallback(OnLidarInfoChange, nullptr);
 
-  // Initialise the SDK.  We pass nullptr for the config file and rely on the
-  // host_ip auto-discovery path (or the explicitly supplied host_ip).
-  if (!LivoxLidarSdkInit(nullptr, host_ip.c_str())) {
+  // Write a minimal config so the SDK's internal DeviceInfo map is properly
+  // initialised before discovery responses arrive.  Passing nullptr here
+  // causes GetFirmwareType() to dereference an uninitialised entry → SIGSEGV.
+  std::string tmp_cfg = WriteTempConfig(host_ip);
+  if (tmp_cfg.empty()) {
+    std::cerr << "[warn] Could not write temporary config; "
+                 "SDK may crash on discovery responses.\n";
+  }
+
+  const char* cfg_path = tmp_cfg.empty() ? nullptr : tmp_cfg.c_str();
+
+  if (!LivoxLidarSdkInit(cfg_path, host_ip.c_str())) {
     std::cerr << "[err] LivoxLidarSdkInit() failed. "
                  "Check that the host IP / NIC is correct.\n";
+    if (!tmp_cfg.empty()) std::remove(tmp_cfg.c_str());
     return 1;
   }
 
@@ -198,6 +253,9 @@ int main(int argc, char** argv) {
       [] { return g_state.ip_set_done.load(); });
 
   LivoxLidarSdkUninit();
+
+  // Remove the temporary config file written to avoid the SDK SIGSEGV
+  if (!tmp_cfg.empty()) std::remove(tmp_cfg.c_str());
 
   if (!completed) {
     std::cerr << "[err] Timed out after " << kTimeoutSeconds << "s. "
