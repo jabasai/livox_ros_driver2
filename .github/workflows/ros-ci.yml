@@ -53,6 +53,10 @@ jobs:
           path: src/livox_ros_driver2
       - name: setup ROS environment
         uses: ros-tooling/setup-ros@v0.7
+      - name: install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential cmake
       - name: install Livox SDK2
         run: |
           REPO_DIR="/tmp/livox_sdk2_repo"

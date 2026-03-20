@@ -34,7 +34,7 @@ jobs:
       - name: install workspace dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ros-humble-ros-base
+          sudo apt-get install -y build-essential cmake ros-humble-ros-base
           source /opt/ros/humble/setup.bash
           rosdep update --rosdistro humble
           rosdep install --from-paths ${GITHUB_WORKSPACE}/src --ignore-src -r -y
