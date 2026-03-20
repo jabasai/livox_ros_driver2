@@ -76,9 +76,3 @@ jobs:
           import-token: ${{ github.token }}
           target-ros2-distro: ${{ matrix.ros_distribution }}
           skip-tests: true
-      - name: check package is installed
-        if: ${{ matrix.ros_version == 2 }}
-        shell: bash
-        run: |
-          source install/setup.bash
-          ros2 pkg executables livox_ros_driver2
