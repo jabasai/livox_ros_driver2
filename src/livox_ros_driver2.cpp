@@ -30,6 +30,7 @@
 
 #include "include/livox_ros_driver2.h"
 #include "include/ros_headers.h"
+#include "include/livox_log.h"
 #include "driver_node.h"
 #include "lddc.h"
 #include "lds_lidar.h"
