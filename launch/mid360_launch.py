@@ -205,6 +205,7 @@ def _launch_setup(context, *args, **kwargs):
         name=node_name,
         namespace=ns_arg,
         output='screen',
+        respawn=True,
         parameters=[
             {'xfer_format':           int(LaunchConfiguration('xfer_format').perform(context))},
             {'multi_topic':           int(LaunchConfiguration('multi_topic').perform(context))},
@@ -214,6 +215,7 @@ def _launch_setup(context, *args, **kwargs):
             {'frame_id':              frame_id},
             {'user_config_path':      config_path},
             {'cmdline_input_bd_code': ''},
+            {'connect_timeout_s':     float(LaunchConfiguration('connect_timeout_s').perform(context))},
         ],
         remappings=[
             (f'livox/lidar_{ip_suffix}', points_dst),
@@ -281,6 +283,15 @@ def generate_launch_description():
             'node_name',
             default_value='livox_lidar',
             description='ROS node name for the driver instance',
+        ),
+        DeclareLaunchArgument(
+            'connect_timeout_s',
+            default_value='5.0',
+            description=(
+                'Seconds to wait for any lidar to respond after SDK init. '
+                'If no callback is received within this time the node shuts '
+                'down (and is respawned by the launch system).'
+            ),
         ),
 
         # --- namespace / connectivity ----------------------------------------

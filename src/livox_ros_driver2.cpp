@@ -137,6 +137,7 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("user_config_path", "path_default");
   this->declare_parameter("cmdline_input_bd_code", "000000000000001");
   this->declare_parameter("lvx_file_path", "/home/livox/livox_test.lvx");
+  this->declare_parameter("connect_timeout_s", 10.0);
 
   this->get_parameter("xfer_format", xfer_format);
   this->get_parameter("multi_topic", multi_topic);
@@ -174,6 +175,40 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
 
     if ((read_lidar->InitLdsLidar(user_config_path))) {
       DRIVER_INFO(*this, "Init lds lidar success!");
+
+      // Watchdog: if no lidar contacts us within connect_timeout_s, the
+      // hardware is unreachable.  Shut down so the node can be respawned.
+      double connect_timeout_s;
+      this->get_parameter("connect_timeout_s", connect_timeout_s);
+      Lds* lds = lddc_ptr_->lds_;
+      watchdog_timer_ = this->create_wall_timer(
+          std::chrono::duration<double>(connect_timeout_s),
+          [this, lds, connect_timeout_s]() {
+            watchdog_timer_->cancel();  // one-shot
+            bool any_connected = false;
+            for (uint32_t i = 0; i < kMaxSourceLidar; i++) {
+              if (lds->lidars_[i].lidar_type != 0 &&
+                  lds->lidars_[i].connect_state.load(std::memory_order_acquire)
+                      != kConnectStateOff) {
+                any_connected = true;
+                break;
+              }
+            }
+            if (!any_connected) {
+              RCLCPP_FATAL(this->get_logger(),
+                  "No lidar connected within %.1f s — hardware unreachable or "
+                  "not responding on the network. Shutting down for respawn.",
+                  connect_timeout_s);
+              // Escalating shutdown in a detached thread so the timer callback
+              // returns immediately: SIGTERM first (gives rclcpp a chance to
+              // clean up), then SIGKILL after 5 s to guarantee the process exits.
+              std::thread([]() {
+                raise(SIGTERM);
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+                raise(SIGKILL);
+              }).detach();
+            }
+          });
     } else {
       DRIVER_ERROR(*this, "Init lds lidar fail!");
     }
