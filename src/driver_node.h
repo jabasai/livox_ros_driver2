@@ -72,6 +72,8 @@ class DriverNode final : public rclcpp::Node {
   std::promise<void> exit_signal_;
   /** One-shot timer: fires if no lidar connects within connect_timeout_s. */
   rclcpp::TimerBase::SharedPtr watchdog_timer_;
+  /** Periodic timer: re-asserts work mode for Sampling lidars with no data yet (Race 3 recovery). */
+  rclcpp::TimerBase::SharedPtr reconnect_timer_;
 };
 #endif
 

@@ -108,7 +108,9 @@ void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
     // process, silently breaking the other driver instance that owns it.
     // Log once per foreign IP to avoid flooding the console on every
     // periodic SDK re-discovery event.
+    static std::mutex s_foreign_mutex;
     static std::unordered_set<uint32_t> s_logged_foreign;
+    std::lock_guard<std::mutex> lock(s_foreign_mutex);
     if (s_logged_foreign.insert(handle).second) {
       LIVOX_WARN("[%s] ignoring lidar — not in this instance's config"
                  " (likely owned by another driver process)",
@@ -175,8 +177,11 @@ void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
         LIVOX_INFO("[%s] no config commands needed, state -> Sampling",
                    IpNumToString(handle).c_str());
       } else {
-        LIVOX_INFO("[%s] waiting for %u config ack(s) before Sampling",
-                   IpNumToString(handle).c_str(), pending_bits);
+        // Count set bits using Brian Kernighan's algorithm (each iteration clears the lowest set bit).
+        uint32_t pending_count = 0;
+        for (uint32_t b = pending_bits; b != 0; b &= (b - 1)) { ++pending_count; }
+        LIVOX_INFO("[%s] waiting for %u config ack(s) before Sampling (pending mask=0x%x)",
+                   IpNumToString(handle).c_str(), pending_count, pending_bits);
       }
     } // free lock for set_bits
 
@@ -205,9 +210,13 @@ void LivoxLidarCallback::WorkModeChangedCallback(livox_status status,
                                                  void *client_data) {
   if (status != kLivoxLidarStatusSuccess) {
     // Track per-handle retry count to surface persistent failures.
+    static std::mutex s_retry_mutex;
     static std::unordered_map<uint32_t, int> s_retry_count;
-    int& retries = s_retry_count[handle];
-    ++retries;
+    int retries;
+    {
+      std::lock_guard<std::mutex> lock(s_retry_mutex);
+      retries = ++s_retry_count[handle];
+    }
     LIVOX_WARN("[%s] work mode change failed (status=%d), retry #%d",
                IpNumToString(handle).c_str(), static_cast<int>(status), retries);
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -245,8 +254,13 @@ void LivoxLidarCallback::SetDataTypeCallback(livox_status status, uint32_t handl
                              LivoxLidarCallback::SetDataTypeCallback, client_data);
     LIVOX_WARN("[%s] set data type timed out, retrying...", IpNumToString(handle).c_str());
   } else {
-    LIVOX_ERROR("[%s] set data type failed: ret_code=%d error_key=%d",
-                IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    if (response) {
+      LIVOX_ERROR("[%s] set data type failed: ret_code=%d error_key=%d",
+                  IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    } else {
+      LIVOX_ERROR("[%s] set data type failed: status=%d (no response payload)",
+                  IpNumToString(handle).c_str(), static_cast<int>(status));
+    }
   }
   return;
 }
@@ -278,8 +292,13 @@ void LivoxLidarCallback::SetPatternModeCallback(livox_status status, uint32_t ha
                              LivoxLidarCallback::SetPatternModeCallback, client_data);
     LIVOX_WARN("[%s] set scan pattern timed out, retrying...", IpNumToString(handle).c_str());
   } else {
-    LIVOX_ERROR("[%s] set scan pattern failed: ret_code=%d error_key=%d",
-                IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    if (response) {
+      LIVOX_ERROR("[%s] set scan pattern failed: ret_code=%d error_key=%d",
+                  IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    } else {
+      LIVOX_ERROR("[%s] set scan pattern failed: status=%d (no response payload)",
+                  IpNumToString(handle).c_str(), static_cast<int>(status));
+    }
   }
   return;
 }
@@ -311,8 +330,13 @@ void LivoxLidarCallback::SetBlindSpotCallback(livox_status status, uint32_t hand
                            LivoxLidarCallback::SetBlindSpotCallback, client_data);
     LIVOX_WARN("[%s] set blind spot timed out, retrying...", IpNumToString(handle).c_str());
   } else {
-    LIVOX_ERROR("[%s] set blind spot failed: ret_code=%d error_key=%d",
-                IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    if (response) {
+      LIVOX_ERROR("[%s] set blind spot failed: ret_code=%d error_key=%d",
+                  IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    } else {
+      LIVOX_ERROR("[%s] set blind spot failed: status=%d (no response payload)",
+                  IpNumToString(handle).c_str(), static_cast<int>(status));
+    }
   }
   return;
 }
@@ -344,8 +368,13 @@ void LivoxLidarCallback::SetDualEmitCallback(livox_status status, uint32_t handl
                           LivoxLidarCallback::SetDualEmitCallback, client_data);
     LIVOX_WARN("[%s] set dual emit timed out, retrying...", IpNumToString(handle).c_str());
   } else {
-    LIVOX_ERROR("[%s] set dual emit failed: ret_code=%d error_key=%d",
-                IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    if (response) {
+      LIVOX_ERROR("[%s] set dual emit failed: ret_code=%d error_key=%d",
+                  IpNumToString(handle).c_str(), response->ret_code, response->error_key);
+    } else {
+      LIVOX_ERROR("[%s] set dual emit failed: status=%d (no response payload)",
+                  IpNumToString(handle).c_str(), static_cast<int>(status));
+    }
   }
   return;
 }

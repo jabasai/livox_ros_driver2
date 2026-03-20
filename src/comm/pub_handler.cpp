@@ -100,6 +100,11 @@ void PubHandler::SetPointCloudsCallback(PointCloudsCallback cb, void* client_dat
   pub_client_data_ = client_data;
   points_callback_ = cb;
   lidar_listen_id_ = LivoxLidarAddPointCloudObserver(OnLivoxLidarPointCloudCallback, this);
+  if (lidar_listen_id_ == 0) {
+    LIVOX_ERROR("LivoxLidarAddPointCloudObserver failed — no point cloud data will be received");
+  } else {
+    LIVOX_INFO("point cloud observer registered (listen_id=%u)", lidar_listen_id_);
+  }
 }
 
 void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t dev_type,
@@ -109,6 +114,21 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
     return;
   }
 
+  // Log the first packet received from each handle to confirm data is flowing.
+  // This MUST be before the AllowHandle check so we can detect Race 3: if the
+  // front driver's SDK is receiving the back lidar's data (and silently dropping
+  // it), this log will appear in the front driver's output, revealing that the
+  // back lidar's data stream is being routed to the wrong process.
+  {
+    static std::unordered_set<uint32_t> s_first_packet_seen;
+    static std::mutex s_first_packet_mutex;
+    std::lock_guard<std::mutex> lock(s_first_packet_mutex);
+    if (s_first_packet_seen.insert(handle).second) {
+      LIVOX_INFO("[%s] first packet received (dev_type=%u, data_type=%u)",
+                 IpNumToString(handle).c_str(), dev_type, data->data_type);
+    }
+  }
+
   // Drop packets from lidars not explicitly configured for this driver instance.
   // This prevents cross-talk when two driver nodes run on the same host and the
   // SDK observer fires for all discovered lidars regardless of which node owns them.
@@ -116,18 +136,23 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
     std::lock_guard<std::mutex> lock(self->allowed_handles_mutex_);
     if (!self->allowed_handles_.empty() &&
         self->allowed_handles_.find(handle) == self->allowed_handles_.end()) {
-      return;  // foreign lidar — silently ignore
-    }
-  }
-
-  // Log the first packet received from each lidar to confirm data is flowing.
-  {
-    static std::unordered_set<uint32_t> s_first_packet_seen;
-    static std::mutex s_first_packet_mutex;
-    std::lock_guard<std::mutex> lock(s_first_packet_mutex);
-    if (s_first_packet_seen.insert(handle).second) {
-      LIVOX_INFO("[%s] first point cloud packet received (dev_type=%u, data_type=%u)",
-                 IpNumToString(handle).c_str(), dev_type, data->data_type);
+      // Throttled warning: if this fires in the FRONT driver for the back
+      // lidar's IP (or vice versa), it confirms Race 3 is occurring — the
+      // SDK routed the wrong lidar's data stream to this process.
+      static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> s_drop_warn_last;
+      static std::mutex s_drop_warn_mutex;
+      {
+        std::lock_guard<std::mutex> wlock(s_drop_warn_mutex);
+        auto now = std::chrono::steady_clock::now();
+        auto& last = s_drop_warn_last[handle];
+        if (now - last > std::chrono::seconds(10)) {
+          last = now;
+          LIVOX_WARN("[%s] dropping packet — handle not in this driver's"
+                     " allowed set (Race 3: SDK data mis-routing?)",
+                     IpNumToString(handle).c_str());
+        }
+      }
+      return;  // foreign lidar — drop
     }
   }
 

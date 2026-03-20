@@ -209,6 +209,66 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
               }).detach();
             }
           });
+
+      // Race-3 recovery timer: fires every 3 s and re-sends SetLivoxLidarWorkMode
+      // + EnableLivoxLidarImuData for any lidar that has reached kConnectStateSampling
+      // but has not yet delivered any data.
+      //
+      // Root cause of Race 3: when the second driver instance starts, the Livox
+      // SDK it initialises discovers ALL lidars on the network and sends each one
+      // a "host registration" packet (host IP + data ports from the config file).
+      // If the first driver's host_net_info entry is not correctly scoped to only
+      // its own lidar IP, this registration overwrites the second driver's, causing
+      // the lidar to send its data stream to the first driver's ports where it is
+      // silently dropped by the AllowHandle filter.
+      //
+      // Mitigation: re-sending SetLivoxLidarWorkMode from THIS driver's cmd_data_port
+      // causes the lidar to update its "active host" to the sender of this command.
+      // Subsequent data will then be routed to this driver's data ports. The timer
+      // cancels itself once all configured lidars have confirmed data flow.
+      reconnect_timer_ = this->create_wall_timer(
+          std::chrono::seconds(3),
+          [this, lds]() {
+            bool all_flowing = true;
+            for (uint32_t i = 0; i < lds->lidar_count_; i++) {
+              LidarDevice& dev = lds->lidars_[i];
+              if (dev.lidar_type == 0) continue;  // slot not in use
+              if (dev.connect_state.load(std::memory_order_acquire)
+                      != kConnectStateSampling) continue;  // not ready yet
+              if (dev.data_received.load(std::memory_order_acquire)) continue; // flowing ✓
+              // Lidar is in Sampling state but no data has arrived yet.
+              // Re-assert ownership by re-sending work mode from this driver.
+              RCLCPP_WARN(this->get_logger(),
+                  "[%s] in Sampling state but no data received — Race 3 suspected."
+                  " Re-asserting work mode to reclaim data stream.",
+                  IpNumToString(dev.handle).c_str());
+              SetLivoxLidarWorkMode(dev.handle, kLivoxLidarNormal,
+                  [](livox_status status, uint32_t handle,
+                     LivoxLidarAsyncControlResponse*, void* /*ctx*/) {
+                    if (status == kLivoxLidarStatusSuccess) {
+                      LIVOX_INFO("[%s] reconnect work-mode refresh OK",
+                                 IpNumToString(handle).c_str());
+                    } else {
+                      LIVOX_WARN("[%s] reconnect work-mode refresh failed (status=%d)",
+                                 IpNumToString(handle).c_str(), static_cast<int>(status));
+                    }
+                  }, nullptr);
+              // Re-send IMU enable so the lidar re-registers its IMU data destination.
+              EnableLivoxLidarImuData(dev.handle,
+                  [](livox_status status, uint32_t handle,
+                     LivoxLidarAsyncControlResponse*, void*) {
+                    if (status != kLivoxLidarStatusSuccess) {
+                      LIVOX_WARN("[%s] reconnect IMU re-enable failed (status=%d)",
+                                 IpNumToString(handle).c_str(), static_cast<int>(status));
+                    }
+                  }, nullptr);
+              all_flowing = false;
+            }
+            if (all_flowing) {
+              reconnect_timer_->cancel();
+              DRIVER_INFO(*this, "All lidars are flowing; reconnect timer cancelled.");
+            }
+          });
     } else {
       DRIVER_ERROR(*this, "Init lds lidar fail!");
     }

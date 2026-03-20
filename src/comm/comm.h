@@ -284,6 +284,10 @@ typedef struct {
   // immediately visible across threads without relying on volatile, which only
   // prevents compiler optimisation and not CPU reordering.
   std::atomic<LidarConnectState> connect_state;
+  // Set to true the first time a point cloud or IMU packet arrives from this
+  // lidar.  Used by the reconnect watchdog to detect when the lidar is in
+  // Sampling state but no data is flowing (Race 3 symptom).
+  std::atomic<bool> data_received{false};
   // DeviceInfo info;
 
   LidarDataQueue data;

@@ -61,6 +61,7 @@ void Lds::ResetLidar(LidarDevice *lidar, uint8_t data_src) {
 
   lidar->data_src = data_src;
   lidar->connect_state.store(kConnectStateOff, std::memory_order_release);
+  lidar->data_received.store(false, std::memory_order_release);
 }
 
 void Lds::SetLidarDataSrc(LidarDevice *lidar, uint8_t data_src) {
@@ -183,6 +184,7 @@ void Lds::PushLidarData(PointPacket* lidar_data, const uint8_t index, const uint
 
   if (!QueueIsFull(queue)) {
     QueuePushAny(queue, (uint8_t *)lidar_data, base_time);
+    p_lidar->data_received.store(true, std::memory_order_release);
     if (!QueueIsEmpty(queue)) {
       if (pcd_semaphore_.GetCount() <= 0) {
         pcd_semaphore_.Signal();

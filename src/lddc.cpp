@@ -40,9 +40,6 @@
 
 namespace livox_ros {
 
-// Minimum interval between "not yet in Sampling state" warnings per lidar (ns).
-static constexpr int64_t kSamplingStateWarnIntervalNs = 10LL * 1000000000LL;
-
 /** Lidar Data Distribute Control--------------------------------------------*/
 #ifdef BUILDING_ROS1
 Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
@@ -133,18 +130,14 @@ void Lddc::DistributePointCloudData(void) {
   for (uint32_t i = 0; i < lds_->lidar_count_; i++) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
-    LidarDataQueue *p_queue = &lidar->data;
-    if (p_queue == nullptr) {
-      continue;
-    }
     if (kConnectStateSampling != lidar->connect_state.load(std::memory_order_acquire)) {
       // Emit a throttled warning so the user can see which lidar is stuck
       // in the init state and not yet publishing data.
       if (lidar->handle != 0) {
-        static std::unordered_map<uint32_t, int64_t> s_last_warn_ns;
-        auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-        auto& last = s_last_warn_ns[lidar->handle];
-        if (now - last > kSamplingStateWarnIntervalNs) {  // warn at most once per 10 s
+        static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> s_last_warn;
+        auto now = std::chrono::steady_clock::now();
+        auto& last = s_last_warn[lidar->handle];
+        if (now - last > std::chrono::seconds(10)) {
           last = now;
           LIVOX_WARN("[%s] not yet in Sampling state (connect_state=%d),"
                      " point cloud will not be published",
@@ -172,8 +165,7 @@ void Lddc::DistributeImuData(void) {
   for (uint32_t i = 0; i < lds_->lidar_count_; i++) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
-    LidarImuDataQueue *p_queue = &lidar->imu_data;
-    if ((kConnectStateSampling != lidar->connect_state.load(std::memory_order_acquire)) || (p_queue == nullptr)) {
+    if (kConnectStateSampling != lidar->connect_state.load(std::memory_order_acquire)) {
       continue;
     }
     PollingLidarImuData(lidar_id, lidar);
