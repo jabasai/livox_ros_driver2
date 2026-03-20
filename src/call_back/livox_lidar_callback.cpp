@@ -424,3 +424,5 @@ LidarDevice* LivoxLidarCallback::GetLidarDevice(const uint32_t handle, void* cli
   return &(lds_lidar->lidars_[index]);
 }
 
+} // namespace livox_ros
+
