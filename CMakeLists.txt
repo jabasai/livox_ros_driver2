@@ -1,3 +1,24 @@
+# Set defaults if not specified, using ROS environment variables when available
+if(NOT DEFINED ROS_EDITION)
+  if(DEFINED ENV{ROS_VERSION})
+    if("$ENV{ROS_VERSION}" STREQUAL "1")
+      set(ROS_EDITION "ROS1" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+    else()
+      set(ROS_EDITION "ROS2" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+    endif()
+  else()
+    set(ROS_EDITION "ROS2" CACHE STRING "ROS edition to build for (ROS1 or ROS2)" FORCE)
+  endif()
+endif()
+
+if(NOT DEFINED HUMBLE_ROS)
+  if(DEFINED ENV{ROS_DISTRO})
+    set(HUMBLE_ROS "$ENV{ROS_DISTRO}" CACHE STRING "ROS2 distro name" FORCE)
+  else()
+    set(HUMBLE_ROS "humble" CACHE STRING "ROS2 distro name" FORCE)
+  endif()
+endif()
+
 # judge which cmake codes to use 
 if(ROS_EDITION STREQUAL "ROS1")
 
@@ -317,6 +338,30 @@ else(ROS_EDITION STREQUAL "ROS2")
     EXECUTABLE ${PROJECT_NAME}_node
   )
 
+  # livox_set_ip: standalone command-line tool to configure lidar IP addresses
+  add_executable(livox_set_ip src/tools/livox_set_ip.cpp)
+  target_include_directories(livox_set_ip PRIVATE
+    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+  )
+  target_link_libraries(livox_set_ip
+    ${LIVOX_LIDAR_SDK_LIBRARY}
+  )
+  install(TARGETS livox_set_ip
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
+  # livox_scan: standalone command-line tool to discover and report Livox devices
+  add_executable(livox_scan src/tools/livox_scan.cpp)
+  target_include_directories(livox_scan PRIVATE
+    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+  )
+  target_link_libraries(livox_scan
+    ${LIVOX_LIDAR_SDK_LIBRARY}
+  )
+  install(TARGETS livox_scan
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
   if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)
     # the following line skips the linter which checks for copyrights
@@ -330,7 +375,7 @@ else(ROS_EDITION STREQUAL "ROS2")
 
   ament_auto_package(INSTALL_TO_SHARE
     config
-    launch_ROS2
+    launch
   )
 
 endif()
