@@ -17,7 +17,21 @@ DEFAULT_BACK_IP         = '192.168.1.184'
 DEFAULT_FRONT_PORT_BASE = 56101
 DEFAULT_BACK_PORT_BASE  = 56111
 # Seconds to wait after starting the front lidar before starting the back lidar.
-# Both lidars initialising simultaneously can cause connection issues.
+#
+# Race-condition note (cross-instance SDK interference):
+#   When the second driver instance starts, the Livox SDK it brings up discovers
+#   *all* reachable lidars on the network — including the front lidar that is
+#   already owned by the first instance.  Application-level guards prevent the
+#   second instance's *application code* from configuring the front lidar, but
+#   the SDK itself may still send lower-level discovery/handshake packets that
+#   temporarily cause the front lidar to renegotiate its "host" endpoint,
+#   interrupting the first driver's data stream.
+#
+#   The delay keeps the two SDK initialisations far enough apart that the front
+#   lidar's handshake is complete and its streaming is stable before the second
+#   SDK starts probing the network.  Values below ~5 s have been observed to
+#   cause intermittent stream loss.  Increase to 10 s or more if the problem
+#   persists on a congested network.
 DEFAULT_BACK_LIDAR_DELAY = 5.0
 
 
@@ -75,7 +89,10 @@ def generate_launch_description():
         default_value=str(DEFAULT_BACK_LIDAR_DELAY),
         description=(
             'Seconds to wait after launching the front lidar before launching '
-            'the back lidar. Avoids simultaneous initialisation issues. '
+            'the back lidar. The Livox SDK in the second driver instance '
+            'discovers all lidars on the network and may briefly interfere with '
+            'the front lidar handshake if both SDKs start simultaneously. '
+            'Increase to 10 s or more if the back lidar still fails to stream. '
             f'Default: {DEFAULT_BACK_LIDAR_DELAY} s.'
         ),
     )

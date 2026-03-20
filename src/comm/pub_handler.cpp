@@ -26,8 +26,10 @@
 
 #include <cstdlib>
 #include <chrono>
-#include <iostream>
 #include <limits>
+#include <unordered_set>
+
+#include "../include/livox_log.h"
 
 namespace livox_ros {
 
@@ -115,6 +117,17 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
     if (!self->allowed_handles_.empty() &&
         self->allowed_handles_.find(handle) == self->allowed_handles_.end()) {
       return;  // foreign lidar — silently ignore
+    }
+  }
+
+  // Log the first packet received from each lidar to confirm data is flowing.
+  {
+    static std::unordered_set<uint32_t> s_first_packet_seen;
+    static std::mutex s_first_packet_mutex;
+    std::lock_guard<std::mutex> lock(s_first_packet_mutex);
+    if (s_first_packet_seen.insert(handle).second) {
+      LIVOX_INFO("[%s] first point cloud packet received (dev_type=%u, data_type=%u)",
+                 IpNumToString(handle).c_str(), dev_type, data->data_type);
     }
   }
 
@@ -325,8 +338,9 @@ void LidarPubHandler::PointCloudProcess(RawPacket & pkt) {
   } else {
     static bool flag = false;
     if (!flag) {
-      std::cout << "error, unsupported protocol type: " << static_cast<int>(pkt.lidar_type) << std::endl;
-      flag = true;      
+      flag = true;
+      LIVOX_ERROR("PointCloudProcess: unsupported protocol type %d",
+                  static_cast<int>(pkt.lidar_type));
     }
   }
 }
@@ -343,8 +357,8 @@ void LidarPubHandler::LivoxLidarPointCloudProcess(RawPacket & pkt) {
       ProcessSphericalPoint(pkt);
       break;
     default:
-      std::cout << "unknown data type: " << static_cast<int>(pkt.data_type)
-                << " !!" << std::endl;
+      LIVOX_ERROR("LivoxLidarPointCloudProcess: unknown data type %d",
+                  static_cast<int>(pkt.data_type));
       break;
   }
 }

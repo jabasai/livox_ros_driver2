@@ -31,6 +31,7 @@
 
 #include "lds.h"
 #include "comm/ldq.h"
+#include "include/livox_log.h"
 
 namespace livox_ros {
 
@@ -50,7 +51,7 @@ Lds::Lds(const double publish_freq, const uint8_t data_src)
 Lds::~Lds() {
   lidar_count_ = 0;
   ResetLds(0);
-  printf("lds destory!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+  LIVOX_INFO("Lds destroyed");
 }
 
 void Lds::ResetLidar(LidarDevice *lidar, uint8_t data_src) {
@@ -59,7 +60,7 @@ void Lds::ResetLidar(LidarDevice *lidar, uint8_t data_src) {
   lidar->imu_data.Clear();
 
   lidar->data_src = data_src;
-  lidar->connect_state = kConnectStateOff;
+  lidar->connect_state.store(kConnectStateOff, std::memory_order_release);
 }
 
 void Lds::SetLidarDataSrc(LidarDevice *lidar, uint8_t data_src) {
@@ -101,7 +102,7 @@ void Lds::StorageImuData(ImuData* imu_data) {
   if (imu_data->lidar_type == kLivoxLidarType) {
     device_num = imu_data->handle;
   } else {
-    printf("Storage imu data failed, unknown lidar type:%u.\n", imu_data->lidar_type);
+    LIVOX_ERROR("StorageImuData: unknown lidar type %u", imu_data->lidar_type);
     return;
   }
 
@@ -134,11 +135,12 @@ void Lds::StorageLvxPointData(PointFrame* frame) {
     uint8_t index = 0;
     int8_t ret = cache_index_.LvxGetIndex(lidar_point.lidar_type, lidar_point.handle, index);
     if (ret != 0) {
-      printf("Storage lvx point data failed, lidar type:%u, device num:%u.\n", lidar_point.lidar_type, lidar_point.handle);
+      LIVOX_ERROR("StorageLvxPointData: unknown lidar type %u handle %u",
+                  lidar_point.lidar_type, lidar_point.handle);
       continue;
     }
 
-    lidars_[index].connect_state = kConnectStateSampling;
+    lidars_[index].connect_state.store(kConnectStateSampling, std::memory_order_release);
 
     PushLidarData(&lidar_point, index, base_time);
   }
@@ -176,7 +178,7 @@ void Lds::PushLidarData(PointPacket* lidar_data, const uint8_t index, const uint
   if (nullptr == queue->storage_packet) {
     uint32_t queue_size = CalculatePacketQueueSize(publish_freq_);
     InitQueue(queue, queue_size);
-    printf("Lidar[%u] storage queue size: %u\n", index, queue_size);
+    LIVOX_INFO("lidar[%u] storage queue initialised, size: %u", index, queue_size);
   }
 
   if (!QueueIsFull(queue)) {

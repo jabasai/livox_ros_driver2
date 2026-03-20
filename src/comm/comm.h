@@ -25,6 +25,7 @@
 #ifndef LIVOX_ROS_DRIVER2_COMM_H_
 #define LIVOX_ROS_DRIVER2_COMM_H_
 
+#include <atomic>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -278,7 +279,11 @@ typedef struct {
   //   uint8_t handle : 4;  // handle for LivoxLidarType::kIndustryLidarType
   // };
   uint8_t data_src;                  /**< From raw lidar or livox file. */
-  volatile LidarConnectState connect_state;
+  // connect_state is written by SDK callback threads (under config_mutex_) and
+  // read by polling threads without a lock.  std::atomic ensures the update is
+  // immediately visible across threads without relying on volatile, which only
+  // prevents compiler optimisation and not CPU reordering.
+  std::atomic<LidarConnectState> connect_state;
   // DeviceInfo info;
 
   LidarDataQueue data;

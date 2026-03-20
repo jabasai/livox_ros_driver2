@@ -26,18 +26,22 @@
 #include "comm/ldq.h"
 #include "comm/comm.h"
 
+#include <chrono>
 #include <inttypes.h>
-#include <iostream>
-#include <iomanip>
 #include <math.h>
 #include <stdint.h>
+#include <unordered_map>
 
 #include "include/ros_headers.h"
+#include "include/livox_log.h"
 
 #include "driver_node.h"
 #include "lds_lidar.h"
 
 namespace livox_ros {
+
+// Minimum interval between "not yet in Sampling state" warnings per lidar (ns).
+static constexpr int64_t kSamplingStateWarnIntervalNs = 10LL * 1000000000LL;
 
 /** Lidar Data Distribute Control--------------------------------------------*/
 #ifdef BUILDING_ROS1
@@ -103,7 +107,7 @@ Lddc::~Lddc() {
     }
   }
 #endif
-  std::cout << "lddc destory!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+  LIVOX_INFO("Lddc destroyed");
 }
 
 int Lddc::RegisterLds(Lds *lds) {
@@ -117,33 +121,50 @@ int Lddc::RegisterLds(Lds *lds) {
 
 void Lddc::DistributePointCloudData(void) {
   if (!lds_) {
-    std::cout << "lds is not registered" << std::endl;
+    LIVOX_ERROR("DistributePointCloudData: LDS not registered");
     return;
   }
   if (lds_->IsRequestExit()) {
-    std::cout << "DistributePointCloudData is RequestExit" << std::endl;
+    LIVOX_DEBUG("DistributePointCloudData: exit requested");
     return;
   }
-  
+
   lds_->pcd_semaphore_.Wait();
   for (uint32_t i = 0; i < lds_->lidar_count_; i++) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
     LidarDataQueue *p_queue = &lidar->data;
-    if ((kConnectStateSampling != lidar->connect_state) || (p_queue == nullptr)) {
+    if (p_queue == nullptr) {
       continue;
     }
-    PollingLidarPointCloudData(lidar_id, lidar);    
+    if (kConnectStateSampling != lidar->connect_state.load(std::memory_order_acquire)) {
+      // Emit a throttled warning so the user can see which lidar is stuck
+      // in the init state and not yet publishing data.
+      if (lidar->handle != 0) {
+        static std::unordered_map<uint32_t, int64_t> s_last_warn_ns;
+        auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+        auto& last = s_last_warn_ns[lidar->handle];
+        if (now - last > kSamplingStateWarnIntervalNs) {  // warn at most once per 10 s
+          last = now;
+          LIVOX_WARN("[%s] not yet in Sampling state (connect_state=%d),"
+                     " point cloud will not be published",
+                     IpNumToString(lidar->handle).c_str(),
+                     static_cast<int>(lidar->connect_state.load(std::memory_order_acquire)));
+        }
+      }
+      continue;
+    }
+    PollingLidarPointCloudData(lidar_id, lidar);
   }
 }
 
 void Lddc::DistributeImuData(void) {
   if (!lds_) {
-    std::cout << "lds is not registered" << std::endl;
+    LIVOX_ERROR("DistributeImuData: LDS not registered");
     return;
   }
   if (lds_->IsRequestExit()) {
-    std::cout << "DistributeImuData is RequestExit" << std::endl;
+    LIVOX_DEBUG("DistributeImuData: exit requested");
     return;
   }
   
@@ -152,7 +173,7 @@ void Lddc::DistributeImuData(void) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
     LidarImuDataQueue *p_queue = &lidar->imu_data;
-    if ((kConnectStateSampling != lidar->connect_state) || (p_queue == nullptr)) {
+    if ((kConnectStateSampling != lidar->connect_state.load(std::memory_order_acquire)) || (p_queue == nullptr)) {
       continue;
     }
     PollingLidarImuData(lidar_id, lidar);
@@ -203,7 +224,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
     StoragePacket pkg;
     QueuePop(queue, &pkg);
     if (pkg.points.empty()) {
-      printf("Publish point cloud2 failed, the pkg points is empty.\n");
+      LIVOX_WARN("PublishPointCloud2: pkg points is empty, skipping");
       continue;
     }
 
@@ -219,7 +240,7 @@ void Lddc::PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index) {
     StoragePacket pkg;
     QueuePop(queue, &pkg);
     if (pkg.points.empty()) {
-      printf("Publish custom point cloud failed, the pkg points is empty.\n");
+      LIVOX_WARN("PublishCustomPointCloud: pkg points is empty, skipping");
       continue;
     }
 
@@ -235,18 +256,17 @@ void Lddc::PublishPclMsg(LidarDataQueue *queue, uint8_t index) {
 #ifdef BUILDING_ROS2
   static bool first_log = true;
   if (first_log) {
-    std::cout << "error: message type 'pcl::PointCloud' is NOT supported in ROS2, "
-              << "please modify the 'xfer_format' field in the launch file"
-              << std::endl;
+    first_log = false;
+    LIVOX_ERROR("message type 'pcl::PointCloud' is NOT supported in ROS2,"
+                " please set 'xfer_format' to a supported type in the launch file");
   }
-  first_log = false;
   return;
 #endif
   while(!QueueIsEmpty(queue)) {
     StoragePacket pkg;
     QueuePop(queue, &pkg);
     if (pkg.points.empty()) {
-      printf("Publish point cloud failed, the pkg points is empty.\n");
+      LIVOX_WARN("PublishPclMsg: pkg points is empty, skipping");
       continue;
     }
 
@@ -376,7 +396,7 @@ void Lddc::InitCustomMsg(CustomMsg& livox_msg, const StoragePacket& pkg, uint8_t
   if (lds_->lidars_[index].lidar_type == kLivoxLidarType) {
     livox_msg.lidar_id = lds_->lidars_[index].handle;
   } else {
-    printf("Init custom msg lidar id failed, the index:%u.\n", index);
+    LIVOX_ERROR("InitCustomMsg: unknown lidar type for index %u", index);
     livox_msg.lidar_id = 0;
   }
 }
@@ -427,9 +447,7 @@ void Lddc::InitPclMsg(const StoragePacket& pkg, PointCloud& cloud, uint64_t& tim
   }
   cloud.header.stamp = timestamp / 1000.0;  // to pcl ros time stamp
 #elif defined BUILDING_ROS2
-  std::cout << "warning: pcl::PointCloud is not supported in ROS2, "
-            << "please check code logic" 
-            << std::endl;
+  LIVOX_WARN("InitPclMsg: pcl::PointCloud is not supported in ROS2 — check code logic");
 #endif
   return;
 }
@@ -452,9 +470,7 @@ void Lddc::FillPointsToPclMsg(const StoragePacket& pkg, PointCloud& pcl_msg) {
     pcl_msg.points.push_back(std::move(point));
   }
 #elif defined BUILDING_ROS2
-  std::cout << "warning: pcl::PointCloud is not supported in ROS2, "
-            << "please check code logic" 
-            << std::endl;
+  LIVOX_WARN("FillPointsToPclMsg: pcl::PointCloud is not supported in ROS2 — check code logic");
 #endif
   return;
 }
@@ -470,9 +486,7 @@ void Lddc::PublishPclData(const uint8_t index, const uint64_t timestamp, const P
     }
   }
 #elif defined BUILDING_ROS2
-  std::cout << "warning: pcl::PointCloud is not supported in ROS2, "
-            << "please check code logic" 
-            << std::endl;
+  LIVOX_WARN("PublishPclData: pcl::PointCloud is not supported in ROS2 — check code logic");
 #endif
   return;
 }

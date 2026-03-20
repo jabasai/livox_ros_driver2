@@ -50,7 +50,8 @@
 #include "call_back/lidar_common_callback.h"
 #include "call_back/livox_lidar_callback.h"
 
-using namespace std;
+#include "include/livox_log.h"
+
 
 namespace livox_ros {
 
@@ -78,7 +79,7 @@ void LdsLidar::ResetLdsLidar(void) { ResetLds(kSourceRawLidar); }
 
 bool LdsLidar::InitLdsLidar(const std::string& path_name) {
   if (is_initialized_) {
-    printf("Lds is already inited!\n");
+    LIVOX_WARN("LdsLidar is already initialized, ignoring duplicate init call");
     return false;
   }
 
@@ -102,7 +103,7 @@ bool LdsLidar::InitLidars() {
   if (!ParseSummaryConfig()) {
     return false;
   }
-  std::cout << "config lidar type: " << static_cast<int>(lidar_summary_info_.lidar_type) << std::endl;
+  LIVOX_INFO("config lidar type: %d", static_cast<int>(lidar_summary_info_.lidar_type));
 
   if (lidar_summary_info_.lidar_type & kLivoxLidarType) {
     if (!InitLivoxLidar()) {
@@ -135,21 +136,23 @@ bool LdsLidar::InitLivoxLidar() {
   LivoxLidarConfigParser parser(path_);
   std::vector<UserLivoxLidarConfig> user_configs;
   if (!parser.Parse(user_configs)) {
-    std::cout << "failed to parse user-defined config" << std::endl;
+    LIVOX_ERROR("failed to parse user-defined lidar config from: %s", path_.c_str());
   }
 
   // SDK initialization
   if (!LivoxLidarSdkInit(path_.c_str())) {
-    std::cout << "Failed to init livox lidar sdk." << std::endl;
+    LIVOX_ERROR("failed to init Livox Lidar SDK with config: %s", path_.c_str());
     return false;
   }
+  LIVOX_INFO("Livox Lidar SDK initialised, config: %s", path_.c_str());
 
   // fill in lidar devices
   for (auto& config : user_configs) {
     uint8_t index = 0;
     int8_t ret = g_lds_ldiar->cache_index_.GetFreeIndex(kLivoxLidarType, config.handle, index);
     if (ret != 0) {
-      std::cout << "failed to get free index, lidar ip: " << IpNumToString(config.handle) << std::endl;
+      LIVOX_ERROR("failed to get free cache index for lidar IP %s",
+                  IpNumToString(config.handle).c_str());
       continue;
     }
     LidarDevice *p_lidar = &(g_lds_ldiar->lidars_[index]);
@@ -159,6 +162,8 @@ bool LdsLidar::InitLivoxLidar() {
 
     // Register this handle so PubHandler drops packets from foreign lidars.
     pub_handler().AllowHandle(config.handle);
+    LIVOX_INFO("registered lidar IP %s (handle=0x%08x, cache index=%u)",
+               IpNumToString(config.handle).c_str(), config.handle, index);
 
     LidarExtParameter lidar_param;
     lidar_param.handle = config.handle;
@@ -200,13 +205,13 @@ bool LdsLidar::LivoxLidarStart() {
 
 int LdsLidar::DeInitLdsLidar(void) {
   if (!is_initialized_) {
-    printf("LiDAR data source is not exit");
+    LIVOX_WARN("DeInitLdsLidar called but LiDAR data source was not initialised");
     return -1;
   }
 
   if (lidar_summary_info_.lidar_type & kLivoxLidarType) {
     LivoxLidarSdkUninit();
-    printf("Livox Lidar SDK Deinit completely!\n");
+    LIVOX_INFO("Livox Lidar SDK uninitialised");
   }
 
   return 0;
