@@ -39,6 +39,19 @@ jobs:
           rosdep update --rosdistro humble
           rosdep install --from-paths ${GITHUB_WORKSPACE}/src --ignore-src -r -y
 
+      - name: install Livox SDK2
+        run: |
+          REPO_DIR="/tmp/livox_sdk2_repo"
+          mkdir -p "$REPO_DIR"
+          git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
+          cd "$REPO_DIR/Livox-SDK2"
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(nproc)
+          make install
+          ldconfig
+          rm -rf "$REPO_DIR"
+
       - name: build workspace
         run: |
           cd ${GITHUB_WORKSPACE}
