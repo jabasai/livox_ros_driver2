@@ -48,8 +48,9 @@ jobs:
     container:
       image: ${{ matrix.docker_image }}
     steps:
-      - uses: actions/checkout@v3
-        path: src/livox_ros_driver2
+      - uses: actions/checkout@v6
+        with:
+          path: src/livox_ros_driver2
       - name: setup ROS environment
         uses: ros-tooling/setup-ros@v0.7
       - name: build and test ROS 2
