@@ -1,0 +1,49 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: setup workspace
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/src
+      
+      - uses: actions/checkout@v3
+        with:
+          path: src/livox_ros_driver2
+
+      - name: setup ROS environment
+        uses: ros-tooling/setup-ros@v0.7
+
+      - name: install workspace dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ros-humble-ros-base
+          source /opt/ros/humble/setup.bash
+          rosdep update --rosdistro humble
+          rosdep install --from-paths ${GITHUB_WORKSPACE}/src --ignore-src -r -y
+
+      - name: build workspace
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          source /opt/ros/humble/setup.bash
+          # Build message/interface packages first so downstream C++ packages
+          # (sentor_guard) can find them via CMAKE_PREFIX_PATH when they build.
+          colcon build --symlink-install --continue-on-error
+          source install/setup.bash
