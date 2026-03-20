@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir -p ${GITHUB_WORKSPACE}/src
       
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           path: src/livox_ros_driver2
 
