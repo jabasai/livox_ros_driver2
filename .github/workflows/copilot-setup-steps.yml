@@ -48,8 +48,8 @@ jobs:
           mkdir -p build && cd build
           cmake ..
           make -j$(nproc)
-          make install
-          ldconfig
+          sudo make install
+          sudo ldconfig
           rm -rf "$REPO_DIR"
 
       - name: build workspace
