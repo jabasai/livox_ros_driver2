@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <arpa/inet.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -42,15 +43,48 @@
 // Per-device information collected during the scan
 // --------------------------------------------------------------------------
 
+struct NetworkConfig {
+  std::string lidar_ip;
+  std::string lidar_netmask;
+  std::string lidar_gateway;
+  
+  std::string point_host_ip;
+  uint16_t    point_host_port;
+  uint16_t    point_lidar_port;
+  
+  std::string imu_host_ip;
+  uint16_t    imu_host_port;
+  uint16_t    imu_lidar_port;
+  
+  std::string state_host_ip;
+  uint16_t    state_host_port;
+  uint16_t    state_lidar_port;
+  
+  std::string ctl_host_ip;
+  uint16_t    ctl_host_port;
+  uint16_t    ctl_lidar_port;
+  
+  std::string log_host_ip;
+  uint16_t    log_host_port;
+  uint16_t    log_lidar_port;
+  
+  NetworkConfig() : point_host_port(0), point_lidar_port(0),
+                    imu_host_port(0), imu_lidar_port(0),
+                    state_host_port(0), state_lidar_port(0),
+                    ctl_host_port(0), ctl_lidar_port(0),
+                    log_host_port(0), log_lidar_port(0) {}
+};
+
 struct ConfigInfo {
-  std::string firmware_version;
-  std::string work_mode;
-  int32_t     pcl_data_type;
-  int32_t     scan_pattern;
-  uint32_t    blind_spot;
-  bool        dual_emit;
-  bool        imu_enabled;
-  bool        config_queried;
+  std::string   firmware_version;
+  std::string   work_mode;
+  int32_t       pcl_data_type;
+  int32_t       scan_pattern;
+  uint32_t      blind_spot;
+  bool          dual_emit;
+  bool          imu_enabled;
+  bool          config_queried;
+  NetworkConfig network;
   
   ConfigInfo() : pcl_data_type(-1), scan_pattern(-1), blind_spot(0),
                  dual_emit(false), imu_enabled(false), config_queried(false) {}
@@ -69,8 +103,9 @@ struct DeviceEntry {
 // --------------------------------------------------------------------------
 
 struct ScanState {
-  std::mutex              mtx;
+  std::mutex               mtx;
   std::vector<DeviceEntry> devices;
+  std::atomic<int>         pending_queries{0};
 };
 
 static ScanState g_scan;
@@ -137,17 +172,23 @@ static void OnFirmwareVersionQuery(livox_status status,
                                    LivoxLidarDiagInternalInfoResponse* response,
                                    void* /*client_data*/) {
   DeviceEntry* dev = FindDeviceByHandle(handle);
-  if (!dev) return;
-
-  if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
-    // Parse firmware version from response data
-    // The format is typically a param_num followed by key-value pairs
-    if (response->param_num > 0 && response->data[0]) {
-      // Simple extraction - firmware version is typically a string
-      dev->config.firmware_version = std::string(reinterpret_cast<const char*>(response->data));
+  
+  if (dev) {
+    if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
+      // Parse firmware version from response data
+      // The format is typically a param_num followed by key-value pairs
+      if (response->param_num > 0 && response->data[0]) {
+        // Simple extraction - firmware version is typically a string
+        dev->config.firmware_version = std::string(reinterpret_cast<const char*>(response->data));
+      }
     }
+    
+    std::cout << "[info] Firmware query response for " << dev->lidar_ip 
+              << " (status=" << status << ")\n";
   }
-  dev->config.config_queried = true;
+  
+  g_scan.pending_queries--;
+  std::cout << "[info] Pending queries: " << g_scan.pending_queries.load() << "\n";
 }
 
 // --------------------------------------------------------------------------
@@ -158,35 +199,132 @@ static void OnInternalInfoQuery(livox_status status,
                                LivoxLidarDiagInternalInfoResponse* response,
                                void* /*client_data*/) {
   DeviceEntry* dev = FindDeviceByHandle(handle);
-  if (!dev) return;
-
-  if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
-    std::cout << "[info] Received internal config for " << dev->lidar_ip 
-              << " (param_num=" << response->param_num << ")\n";
-    
-    // Parse key-value parameters from the response
-    // The data format is: [key(2B)][length(2B)][value(length B)] repeated
-    uint8_t* ptr = response->data;
-    size_t offset = 0;
-    
-    for (int i = 0; i < response->param_num && offset < 1024; ++i) {
-      if (offset + 4 > 1024) break;
-      
-      uint16_t key = *reinterpret_cast<uint16_t*>(ptr + offset);
-      offset += 2;
-      uint16_t length = *reinterpret_cast<uint16_t*>(ptr + offset);
-      offset += 2;
-      
-      if (offset + length > 1024) break;
-      
-      // Parse based on key - common keys include work mode, data type, etc.
-      // Key values would need to be determined from SDK documentation
-      std::cout << "  [param] key=0x" << std::hex << key 
-                << " length=" << std::dec << length << "\n";
-      
-      offset += length;
-    }
+  
+  if (!dev) {
+    std::cout << "[error] Internal info callback for unknown device handle=" << handle << "\n";
+    g_scan.pending_queries--;
+    return;
   }
+  
+  if (status != kLivoxLidarStatusSuccess || response == nullptr || response->ret_code != 0) {
+    std::cout << "[warn] Internal config query failed for " << dev->lidar_ip 
+              << " (status=" << status;
+    if (response) std::cout << ", ret_code=" << (int)response->ret_code;
+    std::cout << ")\n";
+    g_scan.pending_queries--;
+    return;
+  }
+
+  dev->config.config_queried = true;
+
+  // Iterate key-value pairs using the LivoxLidarKeyValueParam struct, exactly
+  // as shown in the Livox SDK2 sample (livox_lidar_quick_start/main.cpp).
+  // Each entry: key(2B) + length(2B) + value(length B).
+  uint16_t off = 0;
+  for (uint8_t i = 0; i < response->param_num; ++i) {
+    LivoxLidarKeyValueParam* kv = reinterpret_cast<LivoxLidarKeyValueParam*>(&response->data[off]);
+
+    // Helper: format 4-byte little-endian IP stored in kv->value[idx..idx+3]
+    auto parse_ip = [&](int idx) -> std::string {
+      char buf[20];
+      snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+               (uint8_t)kv->value[idx],   (uint8_t)kv->value[idx+1],
+               (uint8_t)kv->value[idx+2], (uint8_t)kv->value[idx+3]);
+      return buf;
+    };
+
+    switch (kv->key) {
+      case kKeyPclDataType:
+        if (kv->length >= 1) dev->config.pcl_data_type = kv->value[0];
+        break;
+
+      case kKeyPatternMode:
+        if (kv->length >= 1) dev->config.scan_pattern = kv->value[0];
+        break;
+
+      case kKeyDualEmitEn:
+        if (kv->length >= 1) dev->config.dual_emit = (kv->value[0] != 0);
+        break;
+
+      case kKeyImuDataEn:
+        if (kv->length >= 1) dev->config.imu_enabled = (kv->value[0] != 0);
+        break;
+
+      case kKeyBlindSpotSet:
+        if (kv->length >= 4) memcpy(&dev->config.blind_spot, &kv->value[0], 4);
+        break;
+
+      case kKeyWorkMode:
+        if (kv->length >= 1) {
+          switch (kv->value[0]) {
+            case 0x01: dev->config.work_mode = "Normal";  break;
+            case 0x02: dev->config.work_mode = "WakeUp";  break;
+            case 0x03: dev->config.work_mode = "Sleep";   break;
+            default:   dev->config.work_mode = "Unknown"; break;
+          }
+        }
+        break;
+
+      // LiDAR IP config: ip[4] + netmask[4] + gateway[4]  (12 bytes on wire)
+      case kKeyLidarIpCfg:
+        if (kv->length >= 12) {
+          dev->config.network.lidar_ip      = parse_ip(0);
+          dev->config.network.lidar_netmask = parse_ip(4);
+          dev->config.network.lidar_gateway = parse_ip(8);
+        }
+        break;
+
+      // Host IP configs: ip[4] + host_port[2] + lidar_port[2]  (8 bytes on wire)
+      case kKeyStateInfoHostIpCfg:
+        if (kv->length >= 8) {
+          dev->config.network.state_host_ip = parse_ip(0);
+          memcpy(&dev->config.network.state_host_port,  &kv->value[4], 2);
+          memcpy(&dev->config.network.state_lidar_port, &kv->value[6], 2);
+        }
+        break;
+
+      case kKeyLidarPointDataHostIpCfg:
+        if (kv->length >= 8) {
+          dev->config.network.point_host_ip = parse_ip(0);
+          memcpy(&dev->config.network.point_host_port,  &kv->value[4], 2);
+          memcpy(&dev->config.network.point_lidar_port, &kv->value[6], 2);
+        }
+        break;
+
+      case kKeyLidarImuHostIpCfg:
+        if (kv->length >= 8) {
+          dev->config.network.imu_host_ip = parse_ip(0);
+          memcpy(&dev->config.network.imu_host_port,  &kv->value[4], 2);
+          memcpy(&dev->config.network.imu_lidar_port, &kv->value[6], 2);
+        }
+        break;
+
+      case kKeyCtlHostIpCfg:
+        if (kv->length >= 8) {
+          dev->config.network.ctl_host_ip = parse_ip(0);
+          memcpy(&dev->config.network.ctl_host_port,  &kv->value[4], 2);
+          memcpy(&dev->config.network.ctl_lidar_port, &kv->value[6], 2);
+        }
+        break;
+
+      case kKeyLogHostIpCfg:
+        if (kv->length >= 8) {
+          dev->config.network.log_host_ip = parse_ip(0);
+          memcpy(&dev->config.network.log_host_port,  &kv->value[4], 2);
+          memcpy(&dev->config.network.log_lidar_port, &kv->value[6], 2);
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    off += sizeof(uint16_t) * 2;  // key(2) + length(2)
+    off += kv->length;
+  }
+  
+  g_scan.pending_queries--;
+  std::cout << "[info] Pending queries: " << g_scan.pending_queries.load() << "\n";
 }
 
 // --------------------------------------------------------------------------
@@ -224,6 +362,11 @@ static void OnLidarInfoChange(const uint32_t handle,
   
   // Query device configuration outside the lock
   if (should_query) {
+    std::cout << "[info] Querying configuration for " << info->lidar_ip << " ...\n";
+    
+    // Increment counter before making queries
+    g_scan.pending_queries += 2;
+    
     // Query firmware version
     QueryLivoxLidarFirmwareVer(handle, OnFirmwareVersionQuery, nullptr);
     
@@ -367,6 +510,23 @@ int main(int argc, char** argv) {
 
   std::this_thread::sleep_for(std::chrono::seconds(timeout_secs));
 
+  // Wait for pending queries to complete (with timeout)
+  int wait_count = 0;
+  const int max_wait = 50; // 5 seconds max
+  while (g_scan.pending_queries.load() > 0 && wait_count < max_wait) {
+    std::cout << "[info] Waiting for " << g_scan.pending_queries.load() 
+              << " pending queries...\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    wait_count++;
+  }
+  
+  if (g_scan.pending_queries.load() > 0) {
+    std::cout << "[warn] Timed out waiting for queries, " 
+              << g_scan.pending_queries.load() << " still pending\n";
+  } else {
+    std::cout << "[info] All queries completed\n";
+  }
+
   LivoxLidarSdkUninit();
 
   // Remove the temporary config file written to avoid the SDK SIGSEGV
@@ -451,7 +611,54 @@ int main(int argc, char** argv) {
       std::cout << "  Work Mode:         " << d.config.work_mode << "\n";
     }
     
-    std::cout << "  Config Queried:    " << (d.config.config_queried ? "Yes" : "No") << "\n";
+    // Network Configuration
+    std::cout << "\n  Network Configuration:\n";
+    
+    if (!d.config.network.lidar_ip.empty()) {
+      std::cout << "    LiDAR IP:        " << d.config.network.lidar_ip << "\n";
+      if (!d.config.network.lidar_netmask.empty()) {
+        std::cout << "    Netmask:         " << d.config.network.lidar_netmask << "\n";
+      }
+      if (!d.config.network.lidar_gateway.empty()) {
+        std::cout << "    Gateway:         " << d.config.network.lidar_gateway << "\n";
+      }
+    }
+    
+    if (!d.config.network.point_host_ip.empty()) {
+      std::cout << "\n    Point Cloud:\n";
+      std::cout << "      Host IP:       " << d.config.network.point_host_ip << "\n";
+      std::cout << "      Host Port:     " << d.config.network.point_host_port << "\n";
+      std::cout << "      LiDAR Port:    " << d.config.network.point_lidar_port << "\n";
+    }
+    
+    if (!d.config.network.imu_host_ip.empty()) {
+      std::cout << "\n    IMU Data:\n";
+      std::cout << "      Host IP:       " << d.config.network.imu_host_ip << "\n";
+      std::cout << "      Host Port:     " << d.config.network.imu_host_port << "\n";
+      std::cout << "      LiDAR Port:    " << d.config.network.imu_lidar_port << "\n";
+    }
+    
+    if (!d.config.network.state_host_ip.empty()) {
+      std::cout << "\n    State Info:\n";
+      std::cout << "      Host IP:       " << d.config.network.state_host_ip << "\n";
+      std::cout << "      Host Port:     " << d.config.network.state_host_port << "\n";
+      std::cout << "      LiDAR Port:    " << d.config.network.state_lidar_port << "\n";
+    }
+    
+    if (!d.config.network.ctl_host_ip.empty()) {
+      std::cout << "\n    Control:\n";
+      std::cout << "      Host IP:       " << d.config.network.ctl_host_ip << "\n";
+      std::cout << "      Host Port:     " << d.config.network.ctl_host_port << "\n";
+      std::cout << "      LiDAR Port:    " << d.config.network.ctl_lidar_port << "\n";
+    }
+    
+    if (!d.config.network.log_host_ip.empty()) {
+      std::cout << "\n    Logging:\n";
+      std::cout << "      Host IP:       " << d.config.network.log_host_ip << "\n";
+      std::cout << "      Host Port:     " << d.config.network.log_host_port << "\n";
+      std::cout << "      LiDAR Port:    " << d.config.network.log_lidar_port << "\n";
+    }
+    
     std::cout << "\n";
   }
 
