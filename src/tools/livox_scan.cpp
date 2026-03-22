@@ -173,22 +173,26 @@ static void OnFirmwareVersionQuery(livox_status status,
                                    void* /*client_data*/) {
   DeviceEntry* dev = FindDeviceByHandle(handle);
   
-  if (dev) {
-    if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
-      // Parse firmware version from response data
-      // The format is typically a param_num followed by key-value pairs
-      if (response->param_num > 0 && response->data[0]) {
-        // Simple extraction - firmware version is typically a string
-        dev->config.firmware_version = std::string(reinterpret_cast<const char*>(response->data));
+  if (dev && status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
+    uint16_t off = 0;
+    for (uint8_t i = 0; i < response->param_num; ++i) {
+      LivoxLidarKeyValueParam* kv = reinterpret_cast<LivoxLidarKeyValueParam*>(&response->data[off]);
+      if (kv->key == kKeyVersionApp && kv->length >= 4) {
+        // version_app is uint8_t[4]: [major, minor, patch, build]
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+                 (uint8_t)kv->value[0], (uint8_t)kv->value[1],
+                 (uint8_t)kv->value[2], (uint8_t)kv->value[3]);
+        dev->config.firmware_version = buf;
+        break;
       }
+      off += sizeof(uint16_t) * 2 + kv->length;
     }
-    
     std::cout << "[info] Firmware query response for " << dev->lidar_ip 
-              << " (status=" << status << ")\n";
+              << ": " << dev->config.firmware_version << "\n";
   }
   
   g_scan.pending_queries--;
-  std::cout << "[info] Pending queries: " << g_scan.pending_queries.load() << "\n";
 }
 
 // --------------------------------------------------------------------------
