@@ -362,6 +362,18 @@ else(ROS_EDITION STREQUAL "ROS2")
     DESTINATION lib/${PROJECT_NAME}
   )
 
+  # livox_reboot: standalone command-line tool to reboot or reset Livox devices
+  add_executable(livox_reboot src/tools/livox_reboot.cpp)
+  target_include_directories(livox_reboot PRIVATE
+    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+  )
+  target_link_libraries(livox_reboot
+    ${LIVOX_LIDAR_SDK_LIBRARY}
+  )
+  install(TARGETS livox_reboot
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
   if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)
     # the following line skips the linter which checks for copyrights

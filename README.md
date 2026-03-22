@@ -705,6 +705,41 @@ ros2 run livox_ros_driver2 livox_scan 192.168.1.10 5
 +------------------+------------------+--------------------+
 ```
 
+### 5.3 livox_reboot — Reboot or reset LiDAR devices
+
+`livox_reboot` sends a soft **reboot** (firmware-triggered restart) or **reset** (configuration/state reset) command to one or more Livox LiDARs over the network. It is useful for recovering from a hung state or applying settings that require a restart.
+
+> ⚠️ This is a **soft reboot over the network** — it does not cut physical power. Allow ~30 seconds for the device to come back online.
+
+**Usage:**
+
+```shell
+ros2 run livox_ros_driver2 livox_reboot <ip1> [ip2 ...]  [--reset] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox_reboot --all            [--reset] [--host-ip <host_ip>]
+```
+
+| Option | Description |
+| --- | --- |
+| `--reset` | Send a Reset command (config/state reset) instead of a full Reboot |
+| `--host-ip <ip>` | *(optional)* IP of the host NIC; auto-detected if omitted |
+| `--all` | Target all discovered devices — use with caution! |
+
+**Examples:**
+
+```shell
+# Reboot a single device
+ros2 run livox_ros_driver2 livox_reboot 192.168.1.167
+
+# Reboot both lidars simultaneously
+ros2 run livox_ros_driver2 livox_reboot 192.168.1.167 192.168.1.184
+
+# Reset (not reboot) all discovered devices
+ros2 run livox_ros_driver2 livox_reboot --all --reset
+
+# Reboot with an explicit host NIC address
+ros2 run livox_ros_driver2 livox_reboot 192.168.1.167 --host-ip 192.168.1.10
+```
+
 ---
 
 ## 6. Supported LiDAR list
