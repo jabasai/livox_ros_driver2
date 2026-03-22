@@ -42,11 +42,26 @@
 // Per-device information collected during the scan
 // --------------------------------------------------------------------------
 
+struct ConfigInfo {
+  std::string firmware_version;
+  std::string work_mode;
+  int32_t     pcl_data_type;
+  int32_t     scan_pattern;
+  uint32_t    blind_spot;
+  bool        dual_emit;
+  bool        imu_enabled;
+  bool        config_queried;
+  
+  ConfigInfo() : pcl_data_type(-1), scan_pattern(-1), blind_spot(0),
+                 dual_emit(false), imu_enabled(false), config_queried(false) {}
+};
+
 struct DeviceEntry {
   uint32_t    handle;
   std::string lidar_ip;
   std::string sn;
   uint8_t     dev_type;
+  ConfigInfo  config;
 };
 
 // --------------------------------------------------------------------------
@@ -80,6 +95,101 @@ static const char* DevTypeName(uint8_t dev_type) {
 }
 
 // --------------------------------------------------------------------------
+// Helper: convert point data type enum to string
+// --------------------------------------------------------------------------
+static const char* DataTypeName(int32_t type) {
+  switch (type) {
+    case 0x01: return "Cartesian High";
+    case 0x02: return "Cartesian Low";
+    case 0x03: return "Spherical";
+    default:   return "Unknown";
+  }
+}
+
+// --------------------------------------------------------------------------
+// Helper: convert scan pattern enum to string
+// --------------------------------------------------------------------------
+static const char* ScanPatternName(int32_t pattern) {
+  switch (pattern) {
+    case 0x00: return "Non-Repetitive";
+    case 0x01: return "Repetitive";
+    case 0x02: return "Repetitive Low FPS";
+    default:   return "Unknown";
+  }
+}
+
+// --------------------------------------------------------------------------
+// Helper: find device entry by handle
+// --------------------------------------------------------------------------
+static DeviceEntry* FindDeviceByHandle(uint32_t handle) {
+  std::lock_guard<std::mutex> lock(g_scan.mtx);
+  for (auto& d : g_scan.devices) {
+    if (d.handle == handle) return &d;
+  }
+  return nullptr;
+}
+
+// --------------------------------------------------------------------------
+// Callback: firmware version query response
+// --------------------------------------------------------------------------
+static void OnFirmwareVersionQuery(livox_status status, 
+                                   uint32_t handle,
+                                   LivoxLidarDiagInternalInfoResponse* response,
+                                   void* /*client_data*/) {
+  DeviceEntry* dev = FindDeviceByHandle(handle);
+  if (!dev) return;
+
+  if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
+    // Parse firmware version from response data
+    // The format is typically a param_num followed by key-value pairs
+    if (response->param_num > 0 && response->data[0]) {
+      // Simple extraction - firmware version is typically a string
+      dev->config.firmware_version = std::string(reinterpret_cast<const char*>(response->data));
+    }
+  }
+  dev->config.config_queried = true;
+}
+
+// --------------------------------------------------------------------------
+// Callback: internal info query response  
+// --------------------------------------------------------------------------
+static void OnInternalInfoQuery(livox_status status,
+                               uint32_t handle, 
+                               LivoxLidarDiagInternalInfoResponse* response,
+                               void* /*client_data*/) {
+  DeviceEntry* dev = FindDeviceByHandle(handle);
+  if (!dev) return;
+
+  if (status == kLivoxLidarStatusSuccess && response && response->ret_code == 0) {
+    std::cout << "[info] Received internal config for " << dev->lidar_ip 
+              << " (param_num=" << response->param_num << ")\n";
+    
+    // Parse key-value parameters from the response
+    // The data format is: [key(2B)][length(2B)][value(length B)] repeated
+    uint8_t* ptr = response->data;
+    size_t offset = 0;
+    
+    for (int i = 0; i < response->param_num && offset < 1024; ++i) {
+      if (offset + 4 > 1024) break;
+      
+      uint16_t key = *reinterpret_cast<uint16_t*>(ptr + offset);
+      offset += 2;
+      uint16_t length = *reinterpret_cast<uint16_t*>(ptr + offset);
+      offset += 2;
+      
+      if (offset + length > 1024) break;
+      
+      // Parse based on key - common keys include work mode, data type, etc.
+      // Key values would need to be determined from SDK documentation
+      std::cout << "  [param] key=0x" << std::hex << key 
+                << " length=" << std::dec << length << "\n";
+      
+      offset += length;
+    }
+  }
+}
+
+// --------------------------------------------------------------------------
 // Callback: called by the SDK whenever a lidar is discovered or its info
 //           changes (multiple calls for the same device are de-duplicated)
 // --------------------------------------------------------------------------
@@ -88,25 +198,38 @@ static void OnLidarInfoChange(const uint32_t handle,
                               void* /*client_data*/) {
   if (!info) return;
 
-  std::lock_guard<std::mutex> lock(g_scan.mtx);
+  bool should_query = false;
+  {
+    std::lock_guard<std::mutex> lock(g_scan.mtx);
 
-  // De-duplicate by handle
-  for (const auto& d : g_scan.devices) {
-    if (d.handle == handle) return;
+    // De-duplicate by handle
+    for (const auto& d : g_scan.devices) {
+      if (d.handle == handle) return;
+    }
+
+    DeviceEntry entry;
+    entry.handle   = handle;
+    entry.lidar_ip = info->lidar_ip;
+    entry.sn       = info->sn;
+    entry.dev_type = info->dev_type;
+
+    std::cout << "[found] " << entry.lidar_ip
+              << "  type=" << DevTypeName(entry.dev_type)
+              << "  sn=" << entry.sn
+              << "\n";
+
+    g_scan.devices.push_back(std::move(entry));
+    should_query = true;
   }
-
-  DeviceEntry entry;
-  entry.handle   = handle;
-  entry.lidar_ip = info->lidar_ip;
-  entry.sn       = info->sn;
-  entry.dev_type = info->dev_type;
-
-  std::cout << "[found] " << entry.lidar_ip
-            << "  type=" << DevTypeName(entry.dev_type)
-            << "  sn=" << entry.sn
-            << "\n";
-
-  g_scan.devices.push_back(std::move(entry));
+  
+  // Query device configuration outside the lock
+  if (should_query) {
+    // Query firmware version
+    QueryLivoxLidarFirmwareVer(handle, OnFirmwareVersionQuery, nullptr);
+    
+    // Query internal info (includes various config parameters)
+    QueryLivoxLidarInternalInfo(handle, OnInternalInfoQuery, nullptr);
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -267,7 +390,7 @@ int main(int argc, char** argv) {
   std::cout << "[result] Found " << devs.size()
             << " device(s):\n\n";
 
-  // Column widths
+  // Print basic info table
   const int w_ip   = 16;
   const int w_type = 16;
   const int w_sn   = 18;
@@ -295,6 +418,42 @@ int main(int argc, char** argv) {
 
   hline();
   std::cout << "\n";
+
+  // Print detailed configuration for each device
+  std::cout << "=== Device Configuration Details ===\n\n";
+  
+  for (const auto& d : devs) {
+    std::cout << "Device: " << d.lidar_ip << " (" << d.sn << ")\n";
+    std::cout << "  Type:              " << DevTypeName(d.dev_type) << "\n";
+    
+    if (!d.config.firmware_version.empty()) {
+      std::cout << "  Firmware Version:  " << d.config.firmware_version << "\n";
+    }
+    
+    if (d.config.pcl_data_type >= 0) {
+      std::cout << "  Point Data Type:   " << DataTypeName(d.config.pcl_data_type) 
+                << " (" << d.config.pcl_data_type << ")\n";
+    }
+    
+    if (d.config.scan_pattern >= 0) {
+      std::cout << "  Scan Pattern:      " << ScanPatternName(d.config.scan_pattern)
+                << " (" << d.config.scan_pattern << ")\n";
+    }
+    
+    if (d.config.blind_spot > 0) {
+      std::cout << "  Blind Spot:        " << d.config.blind_spot << " cm\n";
+    }
+    
+    std::cout << "  Dual Emit:         " << (d.config.dual_emit ? "Enabled" : "Disabled") << "\n";
+    std::cout << "  IMU Data:          " << (d.config.imu_enabled ? "Enabled" : "Disabled") << "\n";
+    
+    if (!d.config.work_mode.empty()) {
+      std::cout << "  Work Mode:         " << d.config.work_mode << "\n";
+    }
+    
+    std::cout << "  Config Queried:    " << (d.config.config_queried ? "Yes" : "No") << "\n";
+    std::cout << "\n";
+  }
 
   return 0;
 }
