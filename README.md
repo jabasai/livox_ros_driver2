@@ -1,6 +1,8 @@
 # Livox ROS Driver 2
 
-Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR products produced by Livox, applicable for ROS (noetic recommended) and ROS2 (foxy or humble recommended).
+Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR products produced by Livox.
+
+> **Note:** This branch targets **ROS2 only** (Humble or later recommended). ROS1 is not supported. The build system defaults to ROS2 Humble when invoked without arguments via `colcon`.
 
   **Note :**
 
@@ -10,31 +12,24 @@ Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR pr
 
 ### 1.1 OS requirements
 
-  * Ubuntu 18.04 for ROS Melodic;
-  * Ubuntu 20.04 for ROS Noetic and ROS2 Foxy;
-  * Ubuntu 22.04 for ROS2 Humble;
+  * Ubuntu 20.04 for ROS2 Foxy;
+  * Ubuntu 22.04 for ROS2 Humble (recommended);
 
   **Tips:**
 
-  Colcon is a build tool used in ROS2.
+  Colcon is the build tool used for ROS2.
 
-  How to install colcon: [Colcon installation instructions](https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
+  How to install colcon: [Colcon installation instructions](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
 
-### 1.2 Install ROS & ROS2
-
-For ROS Melodic installation, please refer to:
-[ROS Melodic installation instructions](https://wiki.ros.org/melodic/Installation)
-
-For ROS Noetic installation, please refer to:
-[ROS Noetic installation instructions](https://wiki.ros.org/noetic/Installation)
+### 1.2 Install ROS2
 
 For ROS2 Foxy installation, please refer to:
-[ROS Foxy installation instructions](https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html)
+[ROS2 Foxy installation instructions](https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html)
 
 For ROS2 Humble installation, please refer to:
-[ROS Humble installation instructions](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html)
+[ROS2 Humble installation instructions](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html)
 
-Desktop-Full installation is recommend.
+Desktop-Full installation is recommended.
 
 ## 2. Build & Run Livox ROS Driver 2
 
@@ -56,45 +51,22 @@ git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_
 
 ### 2.3 Build the Livox ROS Driver 2:
 
-#### For ROS (take Noetic as an example):
-```shell
-source /opt/ros/noetic/setup.sh
-./build.sh ROS1
-```
-
 #### For ROS2 Foxy:
 ```shell
 source /opt/ros/foxy/setup.sh
-./build.sh ROS2
+colcon build
 ```
 
-#### For ROS2 Humble:
+#### For ROS2 Humble (recommended):
 ```shell
 source /opt/ros/humble/setup.sh
-./build.sh humble
+colcon build
 ```
+
+The build defaults to ROS2 Humble when the `ROS_DISTRO` and `ROS_VERSION` environment variables are set (as they are after sourcing a ROS2 setup script). No additional arguments are required.
 
 ### 2.4 Run Livox ROS Driver 2:
 
-#### For ROS:
-
-```shell
-source ../../devel/setup.sh
-roslaunch livox_ros_driver2 [launch file]
-```
-
-in which,  
-
-* **livox_ros_driver2** : is the ROS package name of Livox ROS Driver 2;
-* **[launch file]** : is the ROS launch file you want to use; the 'launch_ROS1' folder contains several launch samples for your reference;  
-
-An rviz launch example for HAP LiDAR would be:
-
-```shell
-roslaunch livox_ros_driver2 rviz_HAP.launch
-```
-
-#### For ROS2:
 ```shell
 source ../../install/setup.sh
 ros2 launch livox_ros_driver2 [launch file]
@@ -114,18 +86,19 @@ ros2 launch livox_ros_driver2 rviz_HAP_launch.py
 
 ### 3.1 Launch file configuration instructions
 
-Launch files of ROS are in the "ws_livox/src/livox_ros_driver2/launch_ROS1" directory and launch files of ROS2 are in the "ws_livox/src/livox_ros_driver2/launch_ROS2" directory. Different launch files have different configuration parameter values and are used in different scenarios:
+Launch files are in the `launch/` directory. Different launch files have different configuration parameter values and are used in different scenarios:
 
-| launch file name          | Description                                                  |
-| ------------------------- | ------------------------------------------------------------ |
-| rviz_HAP.launch   | Connect to HAP LiDAR device<br>Publish pointcloud2 format  data<br>Autoload rviz |
-| msg_HAP.launch     | Connect to HAP LiDAR device<br>Publish livox customized pointcloud data|
-| rviz_MID360.launch        | Connect to MID360 LiDAR device<br>Publish pointcloud2 format data <br>Autoload rviz|
-| msg_MID360.launch          | Connect to MID360 LiDAR device<br>Publish livox customized pointcloud data |
-| rviz_mixed.launch    | Connect to HAP and MID360 LiDAR device<br>Publish pointcloud2 format data <br>Autoload rviz|
-| msg_mixed.launch      | Connect to HAP and MID360 LiDAR device<br>Publish livox customized pointcloud data |
+| Launch file | Description |
+| --- | --- |
+| `rviz_HAP_launch.py` | Connect to HAP LiDAR device, publish PointCloud2 data, autoload RViz |
+| `msg_HAP_launch.py` | Connect to HAP LiDAR device, publish Livox customized pointcloud data |
+| `rviz_MID360_launch.py` | Connect to MID360 LiDAR device, publish PointCloud2 data, autoload RViz |
+| `msg_MID360_launch.py` | Connect to MID360 LiDAR device, publish Livox customized pointcloud data |
+| `rviz_mixed.py` | Connect to HAP and MID360 LiDAR devices, publish PointCloud2 data, autoload RViz |
+| `mid360_launch.py` | **Configurable** single MID360 driver — IP, ports, namespace and host IP fully configurable via launch arguments or environment variables; generates config file automatically (see §3.3) |
+| `dual_mid360_launch.py` | Launches a **single** driver node that manages both the front and back MID360 lidars in one SDK instance, eliminating cross-instance SDK race conditions; fully configurable via launch arguments or environment variables (see §3.3) |
 
-### 3.2 Livox ros driver 2 internal main parameter configuration instructions
+### 3.2 Livox ROS Driver 2 internal main parameter configuration instructions
 
 All internal parameters of Livox_ros_driver2 are in the launch file. Below are detailed descriptions of the three commonly used parameters :
 
@@ -133,7 +106,7 @@ All internal parameters of Livox_ros_driver2 are in the launch file. Below are d
 | ------------ | ------------------------------------------------------------ | ------- |
 | publish_freq | Set the frequency of point cloud publish <br>Floating-point data type, recommended values 5.0, 10.0, 20.0, 50.0, etc. The maximum publish frequency is 100.0 Hz.| 10.0    |
 | multi_topic  | If the LiDAR device has an independent topic to publish pointcloud data<br>0 -- All LiDAR devices use the same topic to publish pointcloud data<br>1 -- Each LiDAR device has its own topic to publish point cloud data | 0       |
-| xfer_format  | Set pointcloud format<br>0 -- Livox pointcloud2(PointXYZRTLT) pointcloud format<br>1 -- Livox customized pointcloud format<br>2 -- Standard pointcloud2 (pcl :: PointXYZI) pointcloud format in the PCL library (just for ROS) | 0       |
+| xfer_format  | Set pointcloud format<br>0 -- Livox pointcloud2(PointXYZRTLT) pointcloud format<br>1 -- Livox customized pointcloud format<br>2 -- Standard pointcloud2 (pcl :: PointXYZI) pointcloud format in the PCL library (**not supported in ROS2**) | 0       |
 
   **Note :**
 
@@ -179,9 +152,134 @@ uint8   tag             # livox tag
 uint8   line            # laser number in lidar
 ```
 
-3. The standard pointcloud2 (pcl :: PointXYZI) format in the PCL library (only ROS can publish):
+3. The standard pointcloud2 (pcl :: PointXYZI) format in the PCL library (**not supported in ROS2**):
 
 &ensp;&ensp;&ensp;&ensp;Please refer to the pcl :: PointXYZI data structure in the point_types.hpp file of the PCL library.
+
+---
+
+### 3.3 Configurable MID360 launch files
+
+`mid360_launch.py` and `dual_mid360_launch.py` replace the old static-JSON workflow for MID360 sensors. Instead of editing a JSON config file by hand, the LiDAR IP address, host IP, and UDP ports are resolved at launch time from **launch arguments** or **environment variables**, and a temporary config file is generated automatically in `/tmp/`. The temp file is deleted automatically when the launch session ends.
+
+#### 3.3.1 `mid360_launch.py` — single MID360
+
+Launches one MID360 driver node. All connectivity parameters can be supplied via launch arguments or environment variables. Environment variables are only consulted when the corresponding launch argument is left at its default empty value, so launch arguments always take full precedence.
+
+**Parameter resolution order:** launch argument → environment variable → built-in default
+
+##### Launch arguments
+
+| Argument | Env var (no namespace) | Env var (namespace=`NS`) | Default | Description |
+| --- | --- | --- | --- | --- |
+| `namespace` | — | — | *(empty)* | ROS node/topic namespace **and** env-var prefix (uppercased). Empty = no namespace. |
+| `livox_ip` | `LIVOX_IP` | `NS_LIVOX_IP` | `192.168.1.12` | IP address of the MID360 lidar. |
+| `livox_host_ip` | `LIVOX_HOST_IP` | `NS_LIVOX_HOST_IP` | *(auto-detected)* | Host NIC IP the lidar sends data to. When empty, auto-detected via kernel routing table. |
+| `livox_port_base` | `LIVOX_PORT_BASE` | `NS_LIVOX_PORT_BASE` | `56101` | First UDP host-side listening port. Ports `base … base+4` are used (cmd, push, point, imu, log). |
+| `frame_id` | — | — | `<namespace>` or `livox_frame` | TF frame ID. Defaults to the namespace value when set, otherwise `livox_frame`. |
+| `node_name` | — | — | `livox_lidar` | ROS node name. |
+| `xfer_format` | — | — | `0` | Point cloud format (0=PointXYZRTLT, 1=custom). |
+| `multi_topic` | — | — | `1` | Per-LiDAR topic (1) or shared topic (0). |
+| `publish_freq` | — | — | `10.0` | Publish frequency in Hz. |
+
+##### Port layout
+
+Given `livox_port_base=N`, the five host UDP ports are assigned as:
+
+| Channel | Host port |
+| --- | --- |
+| cmd_data | N |
+| push_msg | N+1 |
+| point_data | N+2 |
+| imu_data | N+3 |
+| log_data | N+4 |
+
+The lidar-side ports (56100, 56200, 56300, 56400, 56500) are fixed by firmware and are always written verbatim into the generated config.
+
+##### Examples
+
+```shell
+# Minimal — all defaults
+ros2 launch livox_ros_driver2 mid360_launch.py
+
+# Explicit launch arguments
+ros2 launch livox_ros_driver2 mid360_launch.py \
+  livox_ip:=192.168.1.167 livox_port_base:=56101
+
+# Via environment variables (no namespace prefix)
+LIVOX_IP=192.168.1.167 ros2 launch livox_ros_driver2 mid360_launch.py
+
+# With namespace — node appears as /front_lidar/livox_lidar
+# and env vars are read with FRONT_LIDAR_ prefix
+FRONT_LIDAR_LIVOX_IP=192.168.1.167 \
+  ros2 launch livox_ros_driver2 mid360_launch.py namespace:=front_lidar
+
+# Fully explicit
+ros2 launch livox_ros_driver2 mid360_launch.py \
+  namespace:=front_lidar \
+  livox_ip:=192.168.1.167 \
+  livox_host_ip:=192.168.1.10 \
+  livox_port_base:=56101
+```
+
+---
+
+#### 3.3.2 `dual_mid360_launch.py` — two MID360 sensors in a single node
+
+Launches a **single** `livox_ros_driver2_node` that manages both the **front** and **back** MID360 lidars within one SDK instance.  Running both lidars in a single process eliminates the cross-instance SDK race condition: when two separate driver processes each initialise their own Livox SDK, the second SDK's device-discovery broadcasts can interfere with the first lidar's host-registration and interrupt its data stream.  A single SDK instance owns both lidars from the start, so no such interference is possible.
+
+A combined JSON config file is generated at launch time with two per-IP `host_net_info` entries (using the array format required to scope each entry to exactly one lidar) and two `lidar_configs` entries.  The file is written to `/tmp/` and removed automatically on shutdown.
+
+With `multi_topic=1` (default) the driver publishes separate topics for each lidar, remapped to:
+
+| Lidar | Points topic | IMU topic | TF frame |
+| --- | --- | --- | --- |
+| Front | `/front_lidar/points` | `/front_lidar/imu` | `front_lidar_link` |
+| Back  | `/back_lidar/points`  | `/back_lidar/imu`  | `back_lidar_link`  |
+
+**Default port layout:**
+
+| Lidar | Ports |
+| --- | --- |
+| Front | 56101–56105 |
+| Back  | 56111–56115 |
+
+##### Launch arguments
+
+| Argument | Env var | Default | Description |
+| --- | --- | --- | --- |
+| `front_livox_ip` | `FRONT_LIDAR_LIVOX_IP` | `192.168.1.167` | IP of the front MID360. |
+| `back_livox_ip` | `BACK_LIDAR_LIVOX_IP` | `192.168.1.184` | IP of the back MID360. |
+| `front_port_base` | `FRONT_LIDAR_LIVOX_PORT_BASE` | `56101` | First UDP host port for the front lidar. |
+| `back_port_base` | `BACK_LIDAR_LIVOX_PORT_BASE` | `56111` | First UDP host port for the back lidar. |
+| `livox_host_ip` | `LIVOX_HOST_IP` | *(auto-detected)* | Host NIC IP both lidars send data to. Auto-detected via routing table when empty. |
+| `front_frame_id` | — | `front_lidar_link` | TF frame ID for front lidar point cloud messages. |
+| `back_frame_id` | — | `back_lidar_link` | TF frame ID for back lidar point cloud messages. |
+| `connect_timeout_s` | — | `10.0` | Seconds to wait for any lidar to connect before the node shuts down for respawn. |
+
+##### Examples
+
+```shell
+# Both IPs via environment variables (recommended)
+FRONT_LIDAR_LIVOX_IP=192.168.1.167 \
+BACK_LIDAR_LIVOX_IP=192.168.1.184 \
+  ros2 launch livox_ros_driver2 dual_mid360_launch.py
+
+# Override IPs via launch arguments
+ros2 launch livox_ros_driver2 dual_mid360_launch.py \
+  front_livox_ip:=192.168.1.167 back_livox_ip:=192.168.1.184
+
+# Custom port bases (e.g. if 56101 is already in use)
+ros2 launch livox_ros_driver2 dual_mid360_launch.py \
+  front_port_base:=56201 back_port_base:=56211
+
+# Explicit host IP
+ros2 launch livox_ros_driver2 dual_mid360_launch.py \
+  front_livox_ip:=192.168.1.167 back_livox_ip:=192.168.1.184 \
+  livox_host_ip:=192.168.1.10
+```
+
+---
 
 ## 4. LiDAR config
 
@@ -330,7 +428,7 @@ For more infomation about the HAP config, please refer to:
   ]
 }
 ```
-3. when multiple nics on the host connect to multiple LiDARs, you need to add objects corresponding to different LiDARs to the lidar_configs array. Run different luanch files separately, and the following is an example of mixing lidar configuration file contents:
+3. when multiple nics on the host connect to multiple LiDARs, you need to add objects corresponding to different LiDARs to the lidar_configs array. Run different launch files separately. The following is an example of a mixed LiDAR configuration for reference — note that the launch file examples below use ROS1 XML syntax; for ROS2, equivalent Python launch files should be used instead:
 
 **MID360_config1:**
 ```json
@@ -514,19 +612,111 @@ For more infomation about the HAP config, please refer to:
 
 ```
 
-## 5. Supported LiDAR list
+## 5. Utility Tools
+
+The `livox` CLI is a single unified command-line tool that consolidates device management operations. Run it with:
+
+```shell
+ros2 run livox_ros_driver2 livox <verb> [options]
+```
+
+| Verb | Description |
+| --- | --- |
+| `search` | Discover all Livox devices visible on the network |
+| `setup` | Assign a static IP address to a lidar |
+| `reboot` | Soft-reboot one or more lidars (firmware restart) |
+| `reset` | Reset one or more lidars (configuration/state reset) |
+| `firmware_upgrade` | Upgrade the firmware on one or more lidars |
+
+Run `livox <verb> --help` for per-verb usage.
+
+### 5.1 search — Discover LiDAR devices on the network
+
+```shell
+ros2 run livox_ros_driver2 livox search [host_ip [timeout_seconds]]
+```
+
+```shell
+# Scan for 10 seconds (default)
+ros2 run livox_ros_driver2 livox search
+
+# Scan from a specific NIC for 5 seconds
+ros2 run livox_ros_driver2 livox search 192.168.1.10 5
+```
+
+### 5.2 setup — Change a LiDAR's IP address
+
+```shell
+ros2 run livox_ros_driver2 livox setup <current_ip> <new_ip> <netmask> <gateway> [host_ip]
+```
+
+```shell
+# Change lidar from factory IP to a static IP
+ros2 run livox_ros_driver2 livox setup 192.168.1.100 192.168.1.167 255.255.255.0 192.168.1.1
+
+# With explicit host NIC address
+ros2 run livox_ros_driver2 livox setup 192.168.1.100 192.168.1.167 255.255.255.0 192.168.1.1 192.168.1.10
+```
+
+**IMPORTANT:** Power-cycle the lidar after this command for the new IP to take effect.
+
+### 5.3 reboot / reset — Reboot or reset LiDAR devices
+
+```shell
+ros2 run livox_ros_driver2 livox reboot <ip1> [ip2 ...] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox reboot --all           [--host-ip <host_ip>]
+
+ros2 run livox_ros_driver2 livox reset  <ip1> [ip2 ...] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox reset  --all           [--host-ip <host_ip>]
+```
+
+| Command | Effect |
+| --- | --- |
+| `reboot` | Soft **reboot** of the LiDAR firmware (equivalent to a power cycle) |
+| `reset` | **Reset** the LiDAR (configuration/state reset, not a full reboot) |
+
+> ⚠️ `reboot` is a firmware-triggered soft restart over the network — it does **not** cut physical power. Allow ~30 seconds for the device to come back online.
+
+```shell
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167 192.168.1.184
+ros2 run livox_ros_driver2 livox reset  --all
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167 --host-ip 192.168.1.10
+```
+
+### 5.4 firmware_upgrade — Upgrade LiDAR firmware
+
+```shell
+ros2 run livox_ros_driver2 livox firmware_upgrade <firmware.bin> [ip1 ip2 ...] [--all] [--host-ip <ip>]
+```
+
+> ⚠️ Do **not** power off the device during an upgrade. The lidar reboots automatically on success.
+
+```shell
+# Upgrade a specific device
+ros2 run livox_ros_driver2 livox firmware_upgrade /path/to/MID360_FW_v13.18.0244.bin 192.168.1.167
+
+# Upgrade all discovered devices simultaneously
+ros2 run livox_ros_driver2 livox firmware_upgrade /path/to/firmware.bin --all
+```
+
+
+
+---
+
+## 6. Supported LiDAR list
 
 * HAP
 * Mid360
 * (more types are comming soon...)
 
-## 6. FAQ
+## 7. FAQ
 
-### 6.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
+### 7.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
 
 Please check the "Global Options - Fixed Frame" field in the RViz "Display" pannel. Set the field value to "livox_frame" and check the "PointCloud2" option in the pannel.
 
-### 6.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
+### 7.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
 
 Please add '/usr/local/lib' to the env LD_LIBRARY_PATH.
 
