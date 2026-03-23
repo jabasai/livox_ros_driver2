@@ -338,39 +338,16 @@ else(ROS_EDITION STREQUAL "ROS2")
     EXECUTABLE ${PROJECT_NAME}_node
   )
 
-  # livox_set_ip: standalone command-line tool to configure lidar IP addresses
-  add_executable(livox_set_ip src/tools/livox_set_ip.cpp)
-  target_include_directories(livox_set_ip PRIVATE
+  # livox: unified command-line tool (search, setup, reboot, reset, firmware_upgrade)
+  # Replaces the former livox_set_ip, livox_scan, and livox_reboot tools.
+  add_executable(livox src/tools/livox.cpp)
+  target_include_directories(livox PRIVATE
     ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
   )
-  target_link_libraries(livox_set_ip
+  target_link_libraries(livox
     ${LIVOX_LIDAR_SDK_LIBRARY}
   )
-  install(TARGETS livox_set_ip
-    DESTINATION lib/${PROJECT_NAME}
-  )
-
-  # livox_scan: standalone command-line tool to discover and report Livox devices
-  add_executable(livox_scan src/tools/livox_scan.cpp)
-  target_include_directories(livox_scan PRIVATE
-    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
-  )
-  target_link_libraries(livox_scan
-    ${LIVOX_LIDAR_SDK_LIBRARY}
-  )
-  install(TARGETS livox_scan
-    DESTINATION lib/${PROJECT_NAME}
-  )
-
-  # livox_reboot: standalone command-line tool to reboot or reset Livox devices
-  add_executable(livox_reboot src/tools/livox_reboot.cpp)
-  target_include_directories(livox_reboot PRIVATE
-    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
-  )
-  target_link_libraries(livox_reboot
-    ${LIVOX_LIDAR_SDK_LIBRARY}
-  )
-  install(TARGETS livox_reboot
+  install(TARGETS livox
     DESTINATION lib/${PROJECT_NAME}
   )
 

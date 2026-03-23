@@ -198,7 +198,9 @@ def _launch_setup(context, *args, **kwargs):
             {'data_src':          int(LaunchConfiguration('data_src').perform(context))},
             {'publish_freq':      float(LaunchConfiguration('publish_freq').perform(context))},
             {'output_data_type':  int(LaunchConfiguration('output_type').perform(context))},
-            {'frame_id':          front_frame_id},
+            {'frame_id':          front_frame_id},  # global default (used if no per-lidar match)
+            # Per-lidar frame_id overrides — each lidar uses its own TF frame:
+            {'lidar_frame_ids':   f'{front_ip}:{front_frame_id},{back_ip}:{back_frame_id}'},
             {'user_config_path':  config_path},
             {'cmdline_input_bd_code': ''},
             {'connect_timeout_s': float(LaunchConfiguration('connect_timeout_s').perform(context))},

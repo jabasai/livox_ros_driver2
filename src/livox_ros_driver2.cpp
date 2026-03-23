@@ -27,6 +27,8 @@
 #include <vector>
 #include <csignal>
 #include <thread>
+#include <sstream>
+#include <unordered_map>
 
 #include "include/livox_ros_driver2.h"
 #include "include/ros_headers.h"
@@ -34,6 +36,7 @@
 #include "driver_node.h"
 #include "lddc.h"
 #include "lds_lidar.h"
+#include "comm/comm.h"
 
 using namespace livox_ros;
 
@@ -139,6 +142,10 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("cmdline_input_bd_code", "000000000000001");
   this->declare_parameter("lvx_file_path", "/home/livox/livox_test.lvx");
   this->declare_parameter("connect_timeout_s", 10.0);
+  // Per-lidar frame_id overrides as "ip1:frame1,ip2:frame2,..." string.
+  // When set, the frame_id for each lidar is determined by its IP address
+  // rather than the single global frame_id parameter.
+  this->declare_parameter("lidar_frame_ids", std::string(""));
 
   this->get_parameter("xfer_format", xfer_format);
   this->get_parameter("multi_topic", multi_topic);
@@ -160,6 +167,30 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   /** Lidar data distribute control and lidar data source set */
   lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, publish_freq, frame_id);
   lddc_ptr_->SetRosNode(this);
+
+  // Parse per-lidar frame_id overrides ("ip1:frame1,ip2:frame2,...")
+  {
+    std::string lidar_frame_ids_str;
+    this->get_parameter("lidar_frame_ids", lidar_frame_ids_str);
+    if (!lidar_frame_ids_str.empty()) {
+      std::unordered_map<uint32_t, std::string> frame_id_map;
+      std::istringstream ss(lidar_frame_ids_str);
+      std::string entry;
+      while (std::getline(ss, entry, ',')) {
+        auto colon = entry.find(':');
+        if (colon != std::string::npos) {
+          std::string ip  = entry.substr(0, colon);
+          std::string fid = entry.substr(colon + 1);
+          uint32_t handle = IpStringToNum(ip);
+          if (handle != 0) {
+            frame_id_map[handle] = fid;
+            DRIVER_INFO(*this, "Per-lidar frame_id: %s -> %s", ip.c_str(), fid.c_str());
+          }
+        }
+      }
+      lddc_ptr_->SetLidarFrameIds(std::move(frame_id_map));
+    }
+  }
 
   if (data_src == kSourceRawLidar) {
     DRIVER_INFO(*this, "Data Source is raw lidar.");

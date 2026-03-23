@@ -275,7 +275,7 @@ def generate_launch_description():
             default_value='',
             description=(
                 'TF frame ID for the lidar. '
-                'When empty (default): uses "<namespace>_livox_frame" if namespace is set, '
+                'When empty (default): uses "<namespace>_link" if namespace is set, '
                 'otherwise "livox_frame".'
             ),
         ),

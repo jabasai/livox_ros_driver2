@@ -614,131 +614,93 @@ For more infomation about the HAP config, please refer to:
 
 ## 5. Utility Tools
 
-### 5.1 livox_set_ip — Change a LiDAR's IP address
-
-`livox_set_ip` is a standalone command-line tool that uses Livox-SDK2 to assign a new static IP address to any connected Livox LiDAR (e.g. MID-360, HAP). It is useful for initial device setup or when you need to move a LiDAR to a different subnet.
-
-**Usage:**
+The `livox` CLI is a single unified command-line tool that consolidates device management operations. Run it with:
 
 ```shell
-ros2 run livox_ros_driver2 livox_set_ip <current_lidar_ip> <new_ip> <netmask> <gateway> [host_ip]
+ros2 run livox_ros_driver2 livox <verb> [options]
 ```
 
-| Argument | Description |
+| Verb | Description |
 | --- | --- |
-| `current_lidar_ip` | Current IP of the LiDAR to configure |
-| `new_ip` | New static IP to assign to the LiDAR |
-| `netmask` | Subnet mask (e.g. `255.255.255.0`) |
-| `gateway` | Gateway address (e.g. `192.168.1.1`) |
-| `host_ip` | *(optional)* IP of the host NIC connected to the LiDAR; omit to let the SDK auto-detect |
+| `search` | Discover all Livox devices visible on the network |
+| `setup` | Assign a static IP address to a lidar |
+| `reboot` | Soft-reboot one or more lidars (firmware restart) |
+| `reset` | Reset one or more lidars (configuration/state reset) |
+| `firmware_upgrade` | Upgrade the firmware on one or more lidars |
 
-**Examples:**
+Run `livox <verb> --help` for per-verb usage.
 
-```shell
-# Change lidar IP; host NIC is explicitly specified
-ros2 run livox_ros_driver2 livox_set_ip 192.168.1.100 192.168.1.167 255.255.255.0 192.168.1.1 192.168.1.10
-
-# Host IP auto-detected by the SDK
-ros2 run livox_ros_driver2 livox_set_ip 192.168.1.167 192.168.1.184 255.255.255.0 192.168.1.1
-```
-
-> **IMPORTANT:** Power-cycle the LiDAR after the tool reports success for the new IP address to take effect.
-
-### 5.2 livox_scan — Discover LiDAR devices on the network
-
-`livox_scan` listens for Livox device announcements for a configurable period and prints a summary table of every device found, including its IP address, device type, and serial number.
-
-**Usage:**
+### 5.1 search — Discover LiDAR devices on the network
 
 ```shell
-ros2 run livox_ros_driver2 livox_scan [OPTIONS] [host_ip [timeout_seconds]]
+ros2 run livox_ros_driver2 livox search [host_ip [timeout_seconds]]
 ```
 
-**Options:**
+```shell
+# Scan for 10 seconds (default)
+ros2 run livox_ros_driver2 livox search
 
-| Option | Description |
+# Scan from a specific NIC for 5 seconds
+ros2 run livox_ros_driver2 livox search 192.168.1.10 5
+```
+
+### 5.2 setup — Change a LiDAR's IP address
+
+```shell
+ros2 run livox_ros_driver2 livox setup <current_ip> <new_ip> <netmask> <gateway> [host_ip]
+```
+
+```shell
+# Change lidar from factory IP to a static IP
+ros2 run livox_ros_driver2 livox setup 192.168.1.100 192.168.1.167 255.255.255.0 192.168.1.1
+
+# With explicit host NIC address
+ros2 run livox_ros_driver2 livox setup 192.168.1.100 192.168.1.167 255.255.255.0 192.168.1.1 192.168.1.10
+```
+
+**IMPORTANT:** Power-cycle the lidar after this command for the new IP to take effect.
+
+### 5.3 reboot / reset — Reboot or reset LiDAR devices
+
+```shell
+ros2 run livox_ros_driver2 livox reboot <ip1> [ip2 ...] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox reboot --all           [--host-ip <host_ip>]
+
+ros2 run livox_ros_driver2 livox reset  <ip1> [ip2 ...] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox reset  --all           [--host-ip <host_ip>]
+```
+
+| Command | Effect |
 | --- | --- |
-| `-h`, `--help` | Show help message and exit |
+| `reboot` | Soft **reboot** of the LiDAR firmware (equivalent to a power cycle) |
+| `reset` | **Reset** the LiDAR (configuration/state reset, not a full reboot) |
 
-**Arguments:**
-
-| Argument | Description |
-| --- | --- |
-| `host_ip` | *(optional)* IP of the host NIC facing the LiDARs; omit to let the SDK auto-detect |
-| `timeout_seconds` | *(optional)* How long to scan in seconds (default: `10`) |
-
-**Examples:**
+> ⚠️ `reboot` is a firmware-triggered soft restart over the network — it does **not** cut physical power. Allow ~30 seconds for the device to come back online.
 
 ```shell
-# Show help
-ros2 run livox_ros_driver2 livox_scan --help
-
-# Scan all NICs for 10 seconds (default)
-ros2 run livox_ros_driver2 livox_scan
-
-# Scan from a specific NIC
-ros2 run livox_ros_driver2 livox_scan 192.168.1.10
-
-# Scan from a specific NIC with a 5-second timeout
-ros2 run livox_ros_driver2 livox_scan 192.168.1.10 5
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167 192.168.1.184
+ros2 run livox_ros_driver2 livox reset  --all
+ros2 run livox_ros_driver2 livox reboot 192.168.1.167 --host-ip 192.168.1.10
 ```
 
-**Example output:**
-
-```
-=== Livox LiDAR scanner ===
-  Host NIC : (auto-detect)
-  Timeout  : 10 s
-
-[info] Scanning for 10 second(s) ...
-
-[found] 192.168.1.167  type=Mid-360  sn=0TFDH7600601234
-[found] 192.168.1.184  type=Mid-360  sn=0TFDH7600605678
-
-[result] Found 2 device(s):
-
-+------------------+------------------+--------------------+
-| IP Address       | Device Type      | Serial Number      |
-+------------------+------------------+--------------------+
-| 192.168.1.167    | Mid-360          | 0TFDH7600601234    |
-| 192.168.1.184    | Mid-360          | 0TFDH7600605678    |
-+------------------+------------------+--------------------+
-```
-
-### 5.3 livox_reboot — Reboot or reset LiDAR devices
-
-`livox_reboot` sends a soft **reboot** (firmware-triggered restart) or **reset** (configuration/state reset) command to one or more Livox LiDARs over the network. It is useful for recovering from a hung state or applying settings that require a restart.
-
-> ⚠️ This is a **soft reboot over the network** — it does not cut physical power. Allow ~30 seconds for the device to come back online.
-
-**Usage:**
+### 5.4 firmware_upgrade — Upgrade LiDAR firmware
 
 ```shell
-ros2 run livox_ros_driver2 livox_reboot <ip1> [ip2 ...]  [--reset] [--host-ip <host_ip>]
-ros2 run livox_ros_driver2 livox_reboot --all            [--reset] [--host-ip <host_ip>]
+ros2 run livox_ros_driver2 livox firmware_upgrade <firmware.bin> [ip1 ip2 ...] [--all] [--host-ip <ip>]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--reset` | Send a Reset command (config/state reset) instead of a full Reboot |
-| `--host-ip <ip>` | *(optional)* IP of the host NIC; auto-detected if omitted |
-| `--all` | Target all discovered devices — use with caution! |
-
-**Examples:**
+> ⚠️ Do **not** power off the device during an upgrade. The lidar reboots automatically on success.
 
 ```shell
-# Reboot a single device
-ros2 run livox_ros_driver2 livox_reboot 192.168.1.167
+# Upgrade a specific device
+ros2 run livox_ros_driver2 livox firmware_upgrade /path/to/MID360_FW_v13.18.0244.bin 192.168.1.167
 
-# Reboot both lidars simultaneously
-ros2 run livox_ros_driver2 livox_reboot 192.168.1.167 192.168.1.184
-
-# Reset (not reboot) all discovered devices
-ros2 run livox_ros_driver2 livox_reboot --all --reset
-
-# Reboot with an explicit host NIC address
-ros2 run livox_ros_driver2 livox_reboot 192.168.1.167 --host-ip 192.168.1.10
+# Upgrade all discovered devices simultaneously
+ros2 run livox_ros_driver2 livox firmware_upgrade /path/to/firmware.bin --all
 ```
+
+
 
 ---
 

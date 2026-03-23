@@ -116,6 +116,17 @@ int Lddc::RegisterLds(Lds *lds) {
   }
 }
 
+std::string Lddc::GetFrameId(uint8_t index) const {
+  if (lds_ && index < kMaxSourceLidar) {
+    uint32_t handle = lds_->lidars_[index].handle;
+    auto it = lidar_frame_ids_.find(handle);
+    if (it != lidar_frame_ids_.end() && !it->second.empty()) {
+      return it->second;
+    }
+  }
+  return frame_id_;
+}
+
 void Lddc::DistributePointCloudData(void) {
   if (!lds_) {
     LIVOX_ERROR("DistributePointCloudData: LDS not registered");
@@ -223,6 +234,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
     PointCloud2 cloud;
     uint64_t timestamp = 0;
     InitPointcloud2Msg(pkg, cloud, timestamp);
+    cloud.header.frame_id = GetFrameId(index);
     PublishPointcloud2Data(index, timestamp, cloud);
   }
 }
@@ -238,6 +250,7 @@ void Lddc::PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index) {
 
     CustomMsg livox_msg;
     InitCustomMsg(livox_msg, pkg, index);
+    livox_msg.header.frame_id = GetFrameId(index);
     FillPointsToCustomMsg(livox_msg, pkg);
     PublishCustomPointData(livox_msg, index);
   }
@@ -265,6 +278,7 @@ void Lddc::PublishPclMsg(LidarDataQueue *queue, uint8_t index) {
     PointCloud cloud;
     uint64_t timestamp = 0;
     InitPclMsg(pkg, cloud, timestamp);
+    cloud.header.frame_id = GetFrameId(index);
     FillPointsToPclMsg(pkg, cloud);
     PublishPclData(index, timestamp, cloud);
   }
@@ -511,6 +525,7 @@ void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index
   ImuMsg imu_msg;
   uint64_t timestamp;
   InitImuMsg(imu_data, imu_msg, timestamp);
+  imu_msg.header.frame_id = GetFrameId(index);  // use per-lidar override (default was hardcoded "livox_frame")
 
 #ifdef BUILDING_ROS1
   PublisherPtr publisher_ptr = GetCurrentImuPublisher(index);

@@ -26,6 +26,8 @@
 #define LIVOX_ROS_DRIVER2_LDDC_H_
 
 #include "include/livox_ros_driver2.h"
+#include <string>
+#include <unordered_map>
 
 #include "driver_node.h"
 #include "lds.h"
@@ -90,6 +92,18 @@ class Lddc final {
   uint8_t IsMultiTopic(void) { return use_multi_topic_; }
   void SetRosNode(livox_ros::DriverNode *node) { cur_node_ = node; }
 
+  /**
+   * Register per-lidar frame IDs.
+   *
+   * @param ids  Map of lidar handle (packed IPv4 uint32) → ROS frame_id string.
+   *             When a handle is present in the map, its frame_id overrides the
+   *             global frame_id_ for every message published from that lidar.
+   *             Pass an empty map to clear all per-lidar overrides.
+   */
+  void SetLidarFrameIds(std::unordered_map<uint32_t, std::string> ids) {
+    lidar_frame_ids_ = std::move(ids);
+  }
+
   // void SetRosPub(ros::Publisher *pub) { global_pub_ = pub; };  // NOT USED
   void SetPublishFrq(uint32_t frq) { publish_frq_ = frq; }
 
@@ -131,6 +145,14 @@ class Lddc final {
   PublisherPtr GetCurrentPublisher(uint8_t index);
   PublisherPtr GetCurrentImuPublisher(uint8_t index);
 
+  /**
+   * Return the effective ROS frame_id for lidar at position @p index.
+   *
+   * Looks up the lidar's handle in lidar_frame_ids_; falls back to the
+   * global frame_id_ if no per-lidar override is registered.
+   */
+  std::string GetFrameId(uint8_t index) const;
+
  private:
   uint8_t transfer_format_;
   uint8_t use_multi_topic_;
@@ -139,6 +161,9 @@ class Lddc final {
   double publish_frq_;
   uint32_t publish_period_ns_;
   std::string frame_id_;
+  /** Per-lidar frame_id overrides (handle → frame_id). Populated via
+   *  SetLidarFrameIds(); populated entries take precedence over frame_id_. */
+  std::unordered_map<uint32_t, std::string> lidar_frame_ids_;
 
 #ifdef BUILDING_ROS1
   bool enable_lidar_bag_;
