@@ -235,8 +235,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index, const std::s
 
     PointCloud2 cloud;
     uint64_t timestamp = 0;
-    InitPointcloud2Msg(pkg, cloud, timestamp);
-    cloud.header.frame_id = GetFrameId(index);
+    InitPointcloud2Msg(pkg, cloud, timestamp, frame_id);
     PublishPointcloud2Data(index, timestamp, cloud);
   }
 }
@@ -251,8 +250,7 @@ void Lddc::PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index, const s
     }
 
     CustomMsg livox_msg;
-    InitCustomMsg(livox_msg, pkg, index);
-    livox_msg.header.frame_id = GetFrameId(index);
+    InitCustomMsg(livox_msg, pkg, index, frame_id);
     FillPointsToCustomMsg(livox_msg, pkg);
     PublishCustomPointData(livox_msg, index);
   }
@@ -279,8 +277,7 @@ void Lddc::PublishPclMsg(LidarDataQueue *queue, uint8_t index, const std::string
 
     PointCloud cloud;
     uint64_t timestamp = 0;
-    InitPclMsg(pkg, cloud, timestamp);
-    cloud.header.frame_id = GetFrameId(index);
+    InitPclMsg(pkg, cloud, timestamp, frame_id);
     FillPointsToPclMsg(pkg, cloud);
     PublishPclData(index, timestamp, cloud);
   }
@@ -526,8 +523,7 @@ void Lddc::PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index
 
   ImuMsg imu_msg;
   uint64_t timestamp;
-  InitImuMsg(imu_data, imu_msg, timestamp);
-  imu_msg.header.frame_id = GetFrameId(index);  // use per-lidar override (default was hardcoded "livox_frame")
+  InitImuMsg(imu_data, imu_msg, timestamp, frame_id);
 
 #ifdef BUILDING_ROS1
   PublisherPtr publisher_ptr = GetCurrentImuPublisher(index);
