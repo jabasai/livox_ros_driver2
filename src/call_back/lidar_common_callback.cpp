@@ -25,6 +25,7 @@
 #include "lidar_common_callback.h"
 
 #include "../lds_lidar.h"
+#include "../include/livox_log.h"
 
 #include <string>
 
@@ -32,34 +33,31 @@ namespace livox_ros {
 
 void LidarCommonCallback::OnLidarPointClounCb(PointFrame* frame, void* client_data) {
   if (frame == nullptr) {
-    printf("LidarPointCloudCb frame is nullptr.\n");
+    LIVOX_ERROR("OnLidarPointCloudCb: frame is nullptr");
     return;
   }
 
   if (client_data == nullptr) {
-    printf("Lidar point cloud cb failed, client data is nullptr.\n");
+    LIVOX_ERROR("OnLidarPointCloudCb: client data is nullptr");
     return;
   }
 
-  if (frame->lidar_num ==0) {
-    printf("LidarPointCloudCb lidar_num:%u.\n", frame->lidar_num);
+  if (frame->lidar_num == 0) {
+    LIVOX_WARN("OnLidarPointCloudCb: lidar_num is 0");
     return;
   }
 
   LdsLidar *lds_lidar = static_cast<LdsLidar *>(client_data);
-  
-  //printf("Lidar point cloud, lidar_num:%u.\n", frame->lidar_num);
-
   lds_lidar->StoragePointData(frame);
 }
 
 void LidarCommonCallback::LidarImuDataCallback(ImuData* imu_data, void *client_data) {
   if (imu_data == nullptr) {
-    printf("Imu data is nullptr.\n");
+    LIVOX_ERROR("LidarImuDataCallback: imu_data is nullptr");
     return;
   }
   if (client_data == nullptr) {
-    printf("Lidar point cloud cb failed, client data is nullptr.\n");
+    LIVOX_ERROR("LidarImuDataCallback: client data is nullptr");
     return;
   }
 

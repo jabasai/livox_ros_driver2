@@ -1,0 +1,60 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: setup workspace
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/src
+      
+      - uses: actions/checkout@v6
+        with:
+          path: src/livox_ros_driver2
+
+      - name: setup ROS environment
+        uses: ros-tooling/setup-ros@v0.7
+
+      - name: install workspace dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ros-humble-ros-base
+          source /opt/ros/humble/setup.bash
+          rosdep update --rosdistro humble
+          rosdep install --from-paths ${GITHUB_WORKSPACE}/src --ignore-src -r -y
+
+      - name: install Livox SDK2
+        run: |
+          REPO_DIR="/tmp/livox_sdk2_repo"
+          mkdir -p "$REPO_DIR"
+          git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
+          cd "$REPO_DIR/Livox-SDK2"
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+          rm -rf "$REPO_DIR"
+
+      - name: build workspace
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --continue-on-error || true
+          source install/setup.bash
