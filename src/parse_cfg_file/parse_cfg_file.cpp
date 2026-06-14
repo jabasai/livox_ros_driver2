@@ -27,6 +27,7 @@
 #include <iostream>
 #include <cstdio>
 #include <arpa/inet.h>
+#include <string>
 
 namespace livox_ros {
 
@@ -64,4 +65,3 @@ bool ParseCfgFile::ParseSummaryInfo(LidarSummaryInfo& lidar_summary_info) {
 }
 
 } // namespace livox_ros
-
