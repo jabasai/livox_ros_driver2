@@ -16,7 +16,7 @@ jobs:
         ros_distribution:
           # - noetic
           - humble
-          # - iron
+          - jazzy
 
         # Define the Docker image(s) associated with each ROS distribution.
         # The include syntax allows additional variables to be defined, like
@@ -37,10 +37,10 @@ jobs:
             ros_distribution: humble
             ros_version: 2
 
-          # Iron Irwini (May 2023 - November 2024)
-          # - docker_image: ubuntu:jammy
-          #   ros_distribution: iron
-          #   ros_version: 2
+          # Jazzy Jalisco (May 2024 - May 2029)
+          - docker_image: ubuntu:noble
+            ros_distribution: jazzy
+            ros_version: 2
 
           # # Rolling Ridley (No End-Of-Life)
           # - docker_image: ubuntu:jammy
@@ -63,10 +63,10 @@ jobs:
         run: |
           REPO_DIR="/tmp/livox_sdk2_repo"
           mkdir -p "$REPO_DIR"
-          git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
+          git clone --branch v0.0.1 --depth 1 https://github.com/LCAS/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
           cd "$REPO_DIR/Livox-SDK2"
           mkdir -p build && cd build
-          cmake ..
+          cmake -DCMAKE_CXX_FLAGS="-include cstdint" ..
           make -j$(nproc)
           make install
           ldconfig
