@@ -66,7 +66,7 @@ jobs:
           git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
           cd "$REPO_DIR/Livox-SDK2"
           mkdir -p build && cd build
-          cmake ..
+          cmake -DCMAKE_CXX_FLAGS="-include cstdint" ..
           make -j$(nproc)
           make install
           ldconfig
