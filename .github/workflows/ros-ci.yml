@@ -63,7 +63,7 @@ jobs:
         run: |
           REPO_DIR="/tmp/livox_sdk2_repo"
           mkdir -p "$REPO_DIR"
-          git clone --branch v1.2.5 --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
+          git clone --branch v0.0.1 --depth 1 https://github.com/LCAS/Livox-SDK2.git "$REPO_DIR/Livox-SDK2"
           cd "$REPO_DIR/Livox-SDK2"
           mkdir -p build && cd build
           cmake -DCMAKE_CXX_FLAGS="-include cstdint" ..
